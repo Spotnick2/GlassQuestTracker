@@ -26,6 +26,10 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path $AddOnsPath)) { Write-Error "AddOns path not found: $AddOnsPath"; exit 1 }
+# Absolute, as LibGlass's deploy does: the stale-file sweep compares against
+# Get-ChildItem's absolute FullName, and a relative $dest made it delete
+# everything it had just copied, the library included (Codex, PR #8).
+$AddOnsPath = (Resolve-Path -LiteralPath $AddOnsPath).ProviderPath
 
 . (Join-Path $PSScriptRoot "LibGlassPin.ps1")
 $LibGlass = if ($env:LIBGLASS) { $env:LIBGLASS } else { Join-Path (Split-Path -Parent $RepoRoot) "LibGlass" }
