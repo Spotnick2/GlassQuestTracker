@@ -1,0 +1,13 @@
+## Interface: 16001
+## Title: |cff7fd4ffGlass|r Quest Tracker
+## Notes: A liquid-glass quest tracker: Blizzard's tracker in glass, sized to your quests, with auto-tracking. /gqt help
+## Author: Spotnick
+## Version: @project-version@
+## X-License: MIT
+## IconTexture: Interface\Icons\inv_misc_book_08
+## SavedVariables: GlassQuestTrackerDB
+
+Libs\LibGlass-1.0\LibGlass-1.0.xml
+Compat.lua
+Glass.lua
+GlassQuestTracker.lua
