@@ -177,15 +177,22 @@ local function points(f)
     if not f then return "n/a" end
     local ok, n = pcall(f.GetNumPoints, f)
     if not ok then return "err" end
+    if issecretvalue and issecretvalue(n) then return "<secret>" end
     local out = {}
     for i = 1, (type(n) == "number" and n or 0) do
         local p = { pcall(f.GetPoint, f, i) }
         if p[1] then
-            -- GetPoint: point, relativeTo, relativePoint, x, y.
+            -- GetPoint: point, relativeTo, relativePoint, x, y. Its results are
+            -- SecretWhenAnchoringSecret (70374 docs): never compare a secret anchor.
             local rel = p[3]
             local t = tracker() or {}
-            local relName = rel == nil and "nil" or rel == t and "tracker" or rel == t.Header and "Header"
-                or rel == t.NineSlice and "NineSlice" or call(rel, "GetName")
+            local relName
+            if issecretvalue and issecretvalue(rel) then relName = "<secret>"
+            elseif rel == nil then relName = "nil"
+            elseif rel == t then relName = "tracker"
+            elseif rel == t.Header then relName = "Header"
+            elseif rel == t.NineSlice then relName = "NineSlice"
+            else relName = call(rel, "GetName") end
             out[#out + 1] = ("%s->%s.%s(%s,%s)"):format(str(p[2]), relName, str(p[4]), str(p[5]), str(p[6]))
         end
     end
