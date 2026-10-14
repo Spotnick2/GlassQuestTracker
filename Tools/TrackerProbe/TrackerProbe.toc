@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: TrackerProbe (Glass Quest Tracker measuring)
+## Notes: Throwaway: measures Blizzard's quest tracker for Glass Quest Tracker. /gqtprobe
+## Author: Spotnick
+## Version: dev
+## SavedVariables: TrackerProbeDB
+
+TrackerProbe.lua

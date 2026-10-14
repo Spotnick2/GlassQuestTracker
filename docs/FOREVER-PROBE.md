@@ -6,17 +6,23 @@ routine below. Record the build each result was measured on.
 
 ## Probe questions (`/gqtprobe`)
 
-| # | Question | Result |
-|---|---|---|
-| P1 | Is Blizzard_ObjectiveTracker loaded before us? Is `ObjectiveTrackerFrame` protected? Strata, level, size, `IsInDefaultPosition`, `editModeHeight`, `isCollapsed` | open |
-| P2 | Module names; blocks, lines, `ItemButton`, `poiButton`. Which values are secret: text, NineSlice/block `GetTop`/`GetBottom`, `IsShown` | open |
-| P3 | NineSlice extent while collapsed and while empty in Edit Mode. Is `IsMouseOver()` secret? | open |
-| P4 | CVars `autoQuestWatch` and `questPOI`; `Constants.QuestWatchConsts.MAX_QUEST_WATCHES`; `GetNumQuestWatches` | open |
-| P5 | `QUEST_ACCEPTED` payload; `GetQuestWatchType` / `AddQuestWatch` right away vs one frame later | open |
-| P6 | **Taint pass A:** count-only `EndLayout` / `Header.SetCollapsed` / Edit Mode hooks, plus a plain child panel of the tracker anchored and re-anchored like Panel.lua | open |
-| P7 | **Taint pass B:** pass A + fade, blank, shadows, minimize tint; does the module header animation flash? | open |
-| P8 | Fonts: `ObjectiveTrackerLineFont:GetFont()`, shadow as built | open |
-| P9 | Other tracker addons loaded (Questie, RXP, ForeverUI) | open |
+Every line the probe prints is also saved: after a `/reload` or logout it's in
+`WTF\Account\<account>\SavedVariables\TrackerProbe.lua` (`TrackerProbeDB.log`).
+
+| # | Question | Command | Result |
+|---|---|---|---|
+| P1 | Is Blizzard_ObjectiveTracker loaded before us? Is `ObjectiveTrackerFrame` protected? Strata, level, size, `IsInDefaultPosition`, `editModeHeight`, `isCollapsed` | `frames` | open |
+| P2 | Module names; blocks, lines, `ItemButton`, right-edge frames. Which values are secret: text, NineSlice/block `GetTop`/`GetBottom`, `IsShown` | `frames` (with a few quests tracked) | open |
+| P3 | NineSlice extent while collapsed and while empty in Edit Mode. Is `IsMouseOver()` secret? | `nine` (toggles a red overlay; look at it collapsed, empty, in Edit Mode) | open |
+| P4 | CVars `autoQuestWatch` and `questPOI`; `Constants.QuestWatchConsts.MAX_QUEST_WATCHES`; `GetNumQuestWatches` | `cvars` | open |
+| P5 | `QUEST_ACCEPTED` payload; `GetQuestWatchType` / `AddQuestWatch` right away vs one frame later | `accept on`, accept a quest; then `accept watch`, accept another | open |
+| P6 | **Taint pass A:** count-only `EndLayout` / `Header.SetCollapsed` / Edit Mode hooks, plus a plain child panel of the tracker (faint blue) anchored and re-anchored like Panel.lua | `hook`, then the routine, then `counts` | open |
+| P7 | **Taint pass B:** pass A + fade, blank, shadows, minimize tint; does the module header animation flash? | `restyle`, `/reload`, the routine, `counts` | open |
+| P8 | Fonts: `ObjectiveTrackerLineFont:GetFont()`, shadow as built | `frames` | open |
+| P9 | Other tracker addons loaded (Questie, RXP, ForeverUI) | `frames` | open |
+
+`hook` and `restyle` are remembered across `/reload` (so the pass is in place from login); `off`
+clears it for the next `/reload`.
 
 **The P6/P7 routine:** `/console taintLog 1`, `/reload`, then accept, progress and turn in a quest;
 collapse and expand by clicking; open Edit Mode, move the tracker, change Text Size, Opacity and
