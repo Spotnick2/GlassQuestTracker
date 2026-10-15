@@ -11,6 +11,7 @@
 --   /gqtprobe restyle      P7: taint pass B (pass A + fade, blank, shadows, tint), kept across /reload
 --   /gqtprobe off          no pass at the next /reload
 --   /gqtprobe counts       how often each hook ran
+--   /gqtprobe routine      which taint-pass steps this session has covered (also logged at logout)
 --   /gqtprobe clear        empty the log
 --
 -- It follows the addon's own rule: only C widget methods on Blizzard objects,
@@ -273,7 +274,34 @@ local panel
 local styled = setmetatable({}, { __mode = "k" })
 local faded = setmetatable({}, { __mode = "k" })
 
-local function count(key) counts[key] = (counts[key] or 0) + 1 end
+-- The routine, recorded as it happens: a short run shows as unchecked steps
+-- instead of passing for a clean one.
+local ROUTINE = {
+    { "accept",   "accept a quest" },
+    { "progress", "advance an objective (kill, loot or talk for a tracked quest)" },
+    { "turnin",   "turn a quest in" },
+    { "collapse", "collapse and expand the tracker (the button at its top right) and a section (Quests)" },
+    { "editmode", "Edit Mode: select the tracker, move it, change Height, Text Size and Opacity, save, close" },
+    { "combat",   "fight something" },
+    { "instance", "enter a dungeon (any instance) with quests tracked" },
+}
+local seen = {}
+
+local function count(key)
+    counts[key] = (counts[key] or 0) + 1
+    if key:find("^SetCollapsed") then seen.collapse = true end
+    if key == "EditMode:hide" then seen.editmode = true end
+end
+
+local function showRoutine()
+    local missing = 0
+    for _, step in ipairs(ROUTINE) do
+        if not seen[step[1]] then missing = missing + 1 end
+        say("routine [" .. (seen[step[1]] and "x" or " ") .. "] " .. step[2])
+    end
+    say(missing == 0 and "routine complete: log out (don't just /reload) so taint.log is written"
+        or ("routine: " .. missing .. " step(s) left"))
+end
 
 -- Something is laid out: any module the container shows.
 local function populated()
@@ -419,9 +447,11 @@ end
 --------------------------------------------------------------------------------
 
 local boot = CreateFrame("Frame")
-boot:RegisterEvent("ADDON_LOADED")
-boot:RegisterEvent("PLAYER_ENTERING_WORLD")
-boot:RegisterEvent("QUEST_ACCEPTED")
+for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "QUEST_ACCEPTED",
+    "QUEST_WATCH_UPDATE", "QUEST_TURNED_IN", "PLAYER_REGEN_DISABLED",
+    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "LUA_WARNING" }) do
+    boot:RegisterEvent(e)
+end
 boot:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" and ... == "TrackerProbe" then
         TrackerProbeDB = type(TrackerProbeDB) == "table" and TrackerProbeDB or {}
@@ -429,13 +459,33 @@ boot:SetScript("OnEvent", function(_, event, ...)
         db.log = type(db.log) == "table" and db.log or {}
         say("session start, build " .. table.concat({ GetBuildInfo() }, " ") .. ", pass=" .. str(db.mode)
             .. ", accept=" .. str(db.accept))
+    elseif not db or event == "ADDON_LOADED" then
+        return
     elseif event == "PLAYER_ENTERING_WORLD" then
+        -- taint.log is only written while this is on; it isn't saved across sessions.
+        local taintLog, inInstance, kind = GetCVar("taintLog"), IsInInstance()
+        if inInstance then seen.instance = true end
+        say("world: taintLog=" .. str(taintLog) .. " instance=" .. str(inInstance) .. "," .. str(kind))
+        if db.mode and taintLog == "0" then say("taintLog is OFF: /console taintLog 1 before the routine") end
         -- The tracker's modules arrive after PLAYER_ENTERING_WORLD + VARIABLES_LOADED.
-        if db and db.mode and not installed then
+        if db.mode and not installed then
             C_Timer.After(1, function() install(db.mode) end)
         end
-    elseif event == "QUEST_ACCEPTED" and db then
+    elseif event == "PLAYER_LOGOUT" then
+        -- Also runs on /reload: every session leaves its counts and routine in the log.
+        if installed then showCounts(); showRoutine() end
+    elseif event == "QUEST_ACCEPTED" then
+        seen.accept = true
         onAccepted(...)
+    elseif event == "QUEST_WATCH_UPDATE" then
+        seen.progress = true
+    elseif event == "QUEST_TURNED_IN" then
+        seen.turnin = true
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        seen.combat = true
+    else
+        -- The taint signals: a blocked action names the addon the client blames.
+        say("TAINT " .. event .. ": " .. table.concat({ str((...)), str((select(2, ...))) }, " "))
     end
 end)
 
@@ -452,8 +502,9 @@ SlashCmdList.TRACKERPROBE = function(msg)
     elseif cmd == "restyle" then db.mode = "B"; install("B")
     elseif cmd == "off" then db.mode = nil; say("no pass at the next /reload")
     elseif cmd == "counts" then showCounts()
+    elseif cmd == "routine" then showRoutine()
     elseif cmd == "clear" then db.log = {}; say("log cleared")
     else
-        say("frames | nine | cvars | accept on|off|watch | hook | restyle | off | counts | clear")
+        say("frames | nine | cvars | accept on|off|watch | hook | restyle | off | counts | routine | clear")
     end
 end
