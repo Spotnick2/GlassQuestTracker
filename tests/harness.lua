@@ -107,3 +107,46 @@ function loadAddon(opts)
     WoW.flushTimers(0)
     return GlassQuestTracker
 end
+
+-- ForeverProbe, the host TrackerProbe is a module of: $FOREVERPROBE, else
+-- ..\ForeverProbe; nil without a checkout (CI without the host's token).
+function foreverProbeRoot()
+    local root = (os.getenv("FOREVERPROBE") or "../ForeverProbe"):gsub("\\", "/"):gsub("/$", "")
+    local toc = io.open(root .. "/ForeverProbe.toc", "rb")
+    if not toc then return nil end
+    toc:close()
+    return root
+end
+
+local function tocScripts(path)
+    local f = assert(io.open(path, "rb"))
+    local list = {}
+    for line in f:read("*a"):gmatch("[^\r\n]+") do
+        line = line:gsub("^%s+", ""):gsub("%s+$", "")
+        if line:match("%.lua$") and not line:match("^#") then list[#list + 1] = (line:gsub("\\", "/")) end
+    end
+    f:close()
+    return list
+end
+
+-- The host, as the client loads it (GlassChat's loadForeverProbe): every TOC
+-- file with ("ForeverProbe", {}), then its ADDON_LOADED.
+function loadForeverProbe(root)
+    for _, file in ipairs(tocScripts(root .. "/ForeverProbe.toc")) do
+        assert(loadfile(root .. "/" .. file))("ForeverProbe", {})
+    end
+    WoW.fire("ADDON_LOADED", "ForeverProbe")
+    return ForeverProbe
+end
+
+-- TrackerProbe, after the host: its TOC's files with ("TrackerProbe", ns),
+-- then its ADDON_LOADED. Returns the namespace (ns._test is the seam).
+function loadProbe()
+    local dir = "Tools/TrackerProbe/"
+    local ns = {}
+    for _, file in ipairs(tocScripts(dir .. "TrackerProbe.toc")) do
+        assert(loadfile(dir .. file))("TrackerProbe", ns)
+    end
+    WoW.fire("ADDON_LOADED", "TrackerProbe")
+    return ns
+end

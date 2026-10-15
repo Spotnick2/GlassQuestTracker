@@ -1,13 +1,16 @@
 # Forever probe: Glass Quest Tracker
 
 What has to be measured on the live client before the skin is built (#2), and what was found.
-Deploy with `pwsh Tools\deploy.ps1 -Probe`, restart the client, then run `/gqtprobe` and the
-routine below. Record the build each result was measured on.
+Record the build each result was measured on.
 
-## Probe questions (`/gqtprobe`)
+TrackerProbe is a ForeverProbe module (`References\PROBES.md`, #13): `/fp gqt <command>`. Deploy
+with `pwsh Tools\deploy.ps1 -Probe`, which deploys the host (`..\ForeverProbe`) first, then
+`/reload`. Its lines go to the ForeverProbe console (`/fp`), never to chat, and are saved: after a
+`/reload` or logout they're in `WTF\Account\<account>\SavedVariables\TrackerProbe.lua`
+(`TrackerProbeDB.log`). Until #13 the probe was `/gqtprobe`, printing to chat; the results below
+were measured with it.
 
-Every line the probe prints is also saved: after a `/reload` or logout it's in
-`WTF\Account\<account>\SavedVariables\TrackerProbe.lua` (`TrackerProbeDB.log`).
+## Probe questions (`/fp gqt`)
 
 | # | Question | Command | Result |
 |---|---|---|---|
@@ -22,20 +25,37 @@ Every line the probe prints is also saved: after a `/reload` or logout it's in
 | P9 | Other tracker addons loaded (Questie, RXP, ForeverUI) | `frames` | **70374:** RXPGuides, Leatrix_Plus (Questie and ForeverUI not installed) |
 
 `hook` and `restyle` are remembered across `/reload` (so the pass is in place from login); `off`
-clears it for the next `/reload`.
+clears it for the next `/reload`. Both **refuse while Glass Quest Tracker is loaded**: two skins
+on one tracker measure nothing. Disable the addon to run a pass; a refused pass isn't remembered.
 
 **The P6/P7 routine:** `/reload`, **then** `/console taintLog 1` (on 70374 the CVar is back to 0
 after a `/reload`, and the probe prints its value on entering the world), then accept, progress and turn in a quest;
 collapse and expand by clicking; open Edit Mode, move the tracker, change Text Size, Opacity and
 Height; fight; enter a dungeon. Then read `Logs\taint.log` and the error frame (especially
 "Auras cannot be accessed when secret"). **If P6 or P7 shows taint, stop and re-plan.**
-`/gqtprobe routine` lists which steps the session has covered; it's also logged at logout.
+`/fp gqt routine` lists which steps the session has covered; it's also logged at logout.
 A step counts only after the pass is installed, and collapse only once both the tracker and a
 section have been collapsed **and** expanded.
 
 On 70374, with `taintLog` 1 or 2, hovering any player throws a Blizzard error
 (`TooltipDataHandler.lua:300`, "attempt to call a nil value"; none at 0). It's the logging,
 not the addon under test: ignore that stack.
+
+## The glass look's checks: `/fp steps gqt look` (#3)
+
+A guided procedure: one step at a time in ForeverProbe's panel, each outcome, note and screenshot
+saved. With the addon enabled, `/reload`, then `/fp steps gqt look`. It:
+- switches each theme and opacity through `/gqt`, and checks the addon's state after each one
+  (glass shown or hidden, wash hidden, NineSlice and header bar faded or back);
+- asks you to collapse and expand the tracker and a section and to use Edit Mode, then checks where
+  the glass went;
+- asks what only you can see (Blizzard's own look under `stock`, the "−" button on the glass, a gold
+  flash, legibility over bright ground), with a screenshot for each visual step;
+- checks that `/gqt failures` is empty, and puts your theme and opacity back.
+
+`/fp gqt state` prints the same state at any time. After the closing `/reload`, the results are in
+`ForeverProbe.lua` (`steps.records["TrackerProbe/look"]`), and the screenshot file names are on
+each step (`..\ForeverProbe\Tools\screenshots.ps1 -Module TrackerProbe` lists them).
 
 ## In-game checklist (v0.1.0, #6)
 

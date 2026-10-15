@@ -658,7 +658,9 @@ WoW.reset()
 -- Strict globals.
 -- LibStub: the embedded library's own loader reads _G.LibStub before creating it.
 local allowNil = { GlassQuestTracker = true, GlassQuestTrackerDB = true,
-                   SLASH_GLASSQUESTTRACKER1 = true, SLASH_GLASSQUESTTRACKER2 = true, LibStub = true }
+                   SLASH_GLASSQUESTTRACKER1 = true, SLASH_GLASSQUESTTRACKER2 = true, LibStub = true,
+                   -- TrackerProbe (tests/test_probe.lua): its saved table, read at its ADDON_LOADED.
+                   TrackerProbeDB = true }
 setmetatable(_G, { __index = function(_, k)
     if allowNil[k] then return nil end
     error("read of undefined global '" .. tostring(k) .. "' (not stubbed: is it in the API dump?)", 2)
