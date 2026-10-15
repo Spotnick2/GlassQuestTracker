@@ -54,7 +54,8 @@ saved. With the addon enabled, `/reload`, then `/fp steps gqt look`. It:
 - checks that `/gqt failures` is empty, and puts your theme and opacity back.
 
 The manual steps check that you did them: a section newly collapsed then expanded, and Edit Mode
-opened and closed since a snapshot taken just before; Next alone fails. Your theme and opacity are
+opened and closed since a snapshot taken just before; Next alone fails. A `/reload` loses that
+snapshot: those steps then fail and say so; go Back to the "Noting" step, press Run, and redo them. Your theme and opacity are
 kept in `TrackerProbeDB.look` until they're put back, so a run stopped or restarted part-way
 doesn't lose them. `/fp gqt restore` puts them back by hand.
 
