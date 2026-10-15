@@ -23,7 +23,7 @@ invent a new idiom.
 - **MIT.** Questie is GPL: ideas only, never its code or icons. QuestieDB is only ever an optional,
   separately installed dependency.
 
-**Status:** milestone 1 (scaffold, #1). The probe (#2) gates the skin.
+**Status:** milestone 3, the glass look (#3). The probe passed the taint gate on 70374 (#2).
 
 ## The UI contract (non-negotiable)
 
@@ -63,12 +63,17 @@ From `..\wow-ui-source` (branch `forever`, 70338) and the 70374 API dump:
 
 | File | What |
 |---|---|
-| `Compat.lua` | `API.*`: failures, events, version, `CVarBool`, `ClassColor`, Settings registration |
+| `Compat.lua` | `API.*`: failures, events, version, `CVarBool`, `ClassColor`, Settings registration; `Fade`/`Blank`/`Tint` and their `Un-` restores |
 | `Glass.lua` | our LibGlass instance (`preset = "clean"`) |
+| `Theme.lua` | clear / smoked / class / stock, the backing opacity, `Refresh` |
+| `Tracker.lua` | read-only resolvers: the frame, NineSlice, Header, modules, pooled extras |
+| `Blizzard.lua` | what is faded, blanked and tinted, and `Restore` (the stock theme) |
+| `Panel.lua` | the glass, a child of the tracker; bottom anchor by state |
+| `Skin.lua` | the `EndLayout` / `SetCollapsed` / Edit Mode hooks, the first pass, `Apply` |
 | `GlassQuestTracker.lua` | bootstrap, `GlassQuestTrackerDB`, `/gqt` |
 
-Planned, per docs/PLAN.md: `Theme`, `Tracker`, `Blizzard`, `Panel`, `Skin`, `AutoTrack`,
-`Options`, and `Tools\TrackerProbe\`.
+Planned, per docs/PLAN.md: `AutoTrack`, `Options`. `Tools\TrackerProbe\` is the measuring addon (never shipped): a ForeverProbe module, `/fp gqt`, with
+`/fp steps gqt look` as the glass look's in-game check.
 
 ## References
 
@@ -87,12 +92,15 @@ Lua 5.1 at `C:\Program Files (x86)\Lua\5.1\` (`lua.exe`, `luac.exe`). No build s
 ```powershell
 pwsh tests\run.ps1                                                   # luac -p on the TOC files (+ probe), then every tests\test_*.lua (needs ..\LibGlass or $env:LIBGLASS)
 & 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root
-pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ TrackerProbe) into AddOns
+pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ ForeverProbe and TrackerProbe) into AddOns
 ```
 
 - Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns`.
-- In game: `/console scriptErrors 1`, `/console taintLog 1`, then `/reload`. A new addon folder
-  needs a client restart.
+- In game: `/console scriptErrors 1`, `/reload`, **then** `/console taintLog 1` (a `/reload` puts it
+  back to 0 on 70374). `/reload` also loads a new addon folder (ForeverProbe guide, section 7).
+- The probe: `/fp gqt` lists its commands; `/fp steps gqt look` walks #3's checks. Read
+  `SavedVariables\TrackerProbe.lua` and `ForeverProbe.lua` (`steps.records`) after the owner's
+  `/reload`, and the screenshots with `..\ForeverProbe\Tools\screenshots.ps1 -Module TrackerProbe`.
 - **Shell heredocs here collapse `\\` to `\`**: write files that contain Lua backslash escapes or
   Windows paths with the Write/Edit tools.
 

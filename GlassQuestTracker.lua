@@ -9,8 +9,11 @@ local say = API.Print
 
 -- GlassQuestTrackerDB, account-wide. Only what the player SET is saved: the
 -- rest falls through to DEFAULTS, so a changed default reaches everyone
--- (GlassMail's rule). The settings themselves arrive with their features.
-local DEFAULTS = {}
+-- (GlassMail's rule).
+local DEFAULTS = {
+    theme = "clear",      -- Theme.NAMES
+    opacity = "medium",   -- Theme.OPACITY_NAMES: the backing under the glass
+}
 GQT.DEFAULTS = DEFAULTS
 
 local function ensureDefaults()
@@ -21,6 +24,11 @@ local function ensureDefaults()
     end
     setmetatable(db, { __index = DEFAULTS })
     return db
+end
+
+-- Save a setting: a value equal to its default is not stored.
+function GQT.Set(key, value)
+    if DEFAULTS[key] == value then GQT.db[key] = nil else GQT.db[key] = value end
 end
 
 -- A dev build, by its version: "dev" from the deploy script, or the
@@ -49,15 +57,32 @@ end
 -- The command list: /gqt help prints it.
 local function helpLines()
     return {
+        "/gqt theme clear|smoked|class|stock - the glass, or Blizzard's own tracker",
+        "/gqt opacity light|medium|solid - the backing under the glass",
         "/gqt failures - what failed to build or register",
         "/gqt version - client build vs the measured one",
     }
 end
 GQT.HelpLines = helpLines
 
+-- /gqt theme and /gqt opacity: one of `names`, saved and applied now.
+local function choose(key, arg, valid, names)
+    if not valid(arg) then
+        say(key .. " is " .. GQT.db[key] .. " (" .. table.concat(names, ", ") .. ")")
+        return
+    end
+    GQT.Set(key, arg)
+    GQT.Skin.Apply()
+    say(key .. ": " .. arg)
+end
+
 local function slash(msg)
-    local cmd = (msg or ""):lower():match("^%s*(%S*)")
-    if cmd == "failures" then
+    local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)")
+    if cmd == "theme" then
+        choose("theme", arg, GQT.Theme.IsValid, GQT.Theme.NAMES)
+    elseif cmd == "opacity" then
+        choose("opacity", arg, GQT.Theme.IsValidOpacity, GQT.Theme.OPACITY_NAMES)
+    elseif cmd == "failures" then
         failures()
     elseif cmd == "version" then
         say("version " .. GQT.VersionText() .. ", client " .. API.ClientBuild()
@@ -79,6 +104,12 @@ boot:SetScript("OnEvent", function(_, event, arg1)
         -- SavedVariables are read here at the latest (porting guide: not at file scope).
         if not GQT.db then GQT.db = ensureDefaults() end
     elseif event == "PLAYER_ENTERING_WORLD" then
+        -- The module instances exist from load; one frame later the tracker's
+        -- own PLAYER_ENTERING_WORLD work has run. Start is once a session.
+        C_Timer.After(0, function()
+            GQT.Skin.Start()
+            GQT.Theme.Retry()
+        end)
         -- arg1 = isInitialLogin. The build warning asks the developer to re-measure.
         if arg1 and GQT.IsDev() and API.ClientBuild() ~= GQT.MEASURED_ON_BUILD then
             say("client build " .. API.ClientBuild() .. " differs from the one this addon was measured on ("

@@ -8,8 +8,8 @@ and sets its height and text size, and the glass follows.
 - **Clear, smoked or class-coloured glass** in place of the gold frame, sized to the quests you
   track instead of the full height.
 - **Fades out** when the mouse is away; the quest text stays readable.
-- **Auto-tracks** quests as you accept them (this client doesn't by default), with a button to
-  track every quest already in your log.
+- **Auto-tracks** quests as you accept them, even with Blizzard's own auto-track turned off, with
+  a button to track every quest already in your log.
 
 Status: in development. The plan is [docs/PLAN.md](docs/PLAN.md).
 
