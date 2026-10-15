@@ -514,8 +514,14 @@ function WoW.collapse(collapsed)
 end
 
 -- The player collapses one module's section: ModuleHeaderMixin:SetCollapsed.
+-- As ObjectiveTrackerModuleMixin:SetCollapsed: the module's field, then its
+-- header (Blizzard_ObjectiveTrackerModule.lua:479).
 function WoW.collapseModule(name, collapsed)
-    WoW.asBlizzard(function() rawget(_G, name).Header:SetCollapsed(collapsed) end)
+    WoW.asBlizzard(function()
+        local m = rawget(_G, name)
+        WoW.bset(m, "isCollapsed", collapsed)
+        m.Header:SetCollapsed(collapsed)
+    end)
 end
 
 -- Edit Mode opens or closes (EditModeManagerFrame's OnShow / OnHide).

@@ -554,14 +554,70 @@ local function opacity(name)
     return G and G.Theme and G.Theme.OPACITY and G.Theme.OPACITY[name]
 end
 
+-- The owner's own theme and opacity, kept in TrackerProbeDB until they're
+-- put back: a run stopped or restarted part-way (the host doesn't run its
+-- remaining steps) must not replace them with the test's (Codex, PR #14).
+local function keepLook()
+    local G = addon()
+    if not (G and G.db) then return end
+    if db.look and db.look.pending then
+        say("an unfinished run's settings are kept to put back: " .. str(db.look.theme) .. ", " .. str(db.look.opacity))
+        return
+    end
+    db.look = { theme = G.Theme.Name(), opacity = G.db.opacity or "medium", pending = true }
+end
+
+-- Puts them back; true once the addon holds them again.
+local function restoreLook()
+    local was = db.look
+    if not (was and was.pending) then say("nothing to put back"); return false end
+    gqt("theme " .. was.theme)
+    gqt("opacity " .. was.opacity)
+    local s = lookState()
+    if s and s.theme == was.theme and s.backing == opacity(was.opacity) then
+        was.pending = false
+        return true
+    end
+    return false
+end
+
+-- What the owner's hands did, which the state alone can't show: a section
+-- may already have been expanded, and Edit Mode leaves no trace (Codex,
+-- PR #14). Sections by Blizzard's own field (Module.lua:480), read only.
+local editMode = { shown = 0, hidden = 0 }
+local before   -- the snapshot the manual steps compare against
+
+local function collapsedSections()
+    local set = {}
+    for _, m in ipairs((modules())) do
+        if m.isCollapsed == true then set[m] = true end
+    end
+    return set
+end
+
+local function hookEditMode()
+    local em = rawget(_G, "EditModeManagerFrame")
+    if type(em) ~= "table" or type(em.HookScript) ~= "function" then return false end
+    em:HookScript("OnShow", function() editMode.shown = editMode.shown + 1 end)
+    em:HookScript("OnHide", function() editMode.hidden = editMode.hidden + 1 end)
+    return true
+end
+
+-- A section collapsed since the snapshot, or nil.
+local function sectionDown()
+    if not before then return nil end
+    for m in pairs(collapsedSections()) do
+        if not before.sections[m] then return m end
+    end
+end
+
 Probe:Steps("look", {
     title = "Glass Quest Tracker: the glass look (#3)",
-    rev = 1,
+    rev = 2,
     { text = "Reading Glass Quest Tracker's state, and your theme and opacity, to put back at the end.",
       auto = true, run = function()
-          local G, s = addon(), lookState()
-          if G and G.db then db.look = { theme = G.Theme.Name(), opacity = G.db.opacity or "medium" } end
-          return describe(s)
+          keepLook()
+          return describe(lookState())
       end,
       check = function()
           local s = lookState()
@@ -602,14 +658,39 @@ Probe:Steps("look", {
       check = glassOn({ collapsed = true, panel = "header" }), screenshot = "collapsed" },
     { text = "Expand it again, then press Next.",
       check = glassOn({ collapsed = false, panel = "populated" }) },
+    { text = "Noting which sections are collapsed now, and Edit Mode's opens and closes so far.", auto = true,
+      run = function()
+          before = { sections = collapsedSections(), shown = editMode.shown, hidden = editMode.hidden }
+          local n = 0
+          for _ in pairs(before.sections) do n = n + 1 end
+          return n .. " collapsed, Edit Mode " .. editMode.shown .. "/" .. editMode.hidden
+      end },
     { text = "Collapse the 'Quests' section with its '-' button, then press Next.",
-      check = glassOn({ panel = "populated" }), screenshot = "section collapsed" },
+      check = function()
+          local m = sectionDown()
+          local ok, why = glassOn({ panel = "populated" })()
+          if not m then return false, "no section was collapsed since the snapshot: " .. why end
+          return ok, moduleName(m) .. " collapsed; " .. why
+      end, screenshot = "section collapsed" },
     { text = "Expand the section again, then press Next.",
-      check = glassOn({ panel = "populated" }) },
+      check = function()
+          local m = sectionDown()
+          local ok, why = glassOn({ panel = "populated" })()
+          if m then return false, moduleName(m) .. " is still collapsed: " .. why end
+          return ok, why
+      end },
     { text = "While you did that (or when a section first appeared), did you see any gold bar or shine flash behind a section title? Note when.",
       ask = true },
     { text = "Open Edit Mode, click the tracker, drag it a little and change its Height. Then close Edit Mode (Save or Revert) and press Next.",
-      check = glassOn({ panel = "populated" }), screenshot = "after Edit Mode" },
+      check = function()
+          local ok, why = glassOn({ panel = "populated" })()
+          local opened = before ~= nil and editMode.shown > before.shown
+          local closed = before ~= nil and editMode.hidden > before.hidden
+          if not (opened and closed) then
+              return false, "Edit Mode wasn't " .. (opened and "closed" or "opened") .. " since the snapshot: " .. why
+          end
+          return ok, why
+      end, screenshot = "after Edit Mode" },
     { text = "Stand or turn so the tracker is over bright ground or sky. Is every line easy to read?",
       ask = true, screenshot = "bright background" },
     { text = "Glass Quest Tracker's failures (/gqt failures).", auto = true,
@@ -626,13 +707,12 @@ Probe:Steps("look", {
       end },
     { text = "Putting your theme and opacity back.", auto = true,
       run = function()
-          local was = db.look or {}
-          gqt("theme " .. (was.theme or "clear"))
-          return gqt("opacity " .. (was.opacity or "medium"))
+          restoreLook()
+          return describe(lookState())
       end,
       check = function()
           local was, s = db.look or {}, lookState()
-          return s ~= nil and s.theme == (was.theme or "clear") and s.backing == opacity(was.opacity or "medium"),
+          return s ~= nil and s.theme == was.theme and s.backing == opacity(was.opacity),
               describe(s)
       end },
     { text = "That's all. Type /reload (or press Reload now) so the results and the screenshot names are saved.",
@@ -658,6 +738,9 @@ Probe:Command("off", function() db.mode = nil; say("no pass at the next /reload"
 Probe:Command("counts", function() showCounts() end, "how often each hook ran")
 Probe:Command("routine", function() showRoutine() end, "which taint-pass steps this session has covered")
 Probe:Command("state", function() say(describe(lookState())) end, "Glass Quest Tracker's look as the addon holds it")
+Probe:Command("restore", function()
+    if restoreLook() then say("your theme and opacity are back") end
+end, "put back the theme and opacity a stopped look run changed")
 Probe:Command("clear", function() Probe:ClearLog(); say("log cleared") end, "empty the saved log")
 
 --------------------------------------------------------------------------------
@@ -674,6 +757,7 @@ boot:SetScript("OnEvent", function(_, event, ...)
         db = TrackerProbeDB
         if type(db.log) ~= "table" then db.log = {} end
         Probe:UseLog(db.log, MAX_LOG)
+        if not hookEditMode() then say("no EditModeManagerFrame: the look procedure's Edit Mode step can't pass") end
         say("session start, build " .. table.concat({ GetBuildInfo() }, " ") .. ", pass=" .. str(db.mode)
             .. ", accept=" .. str(db.accept) .. ", Glass Quest Tracker " .. (addon() and "loaded" or "not loaded"))
     elseif not db or event == "ADDON_LOADED" then

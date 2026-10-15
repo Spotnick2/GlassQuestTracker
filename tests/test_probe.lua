@@ -111,6 +111,20 @@ run(2, "2: clear at medium");      eq(Theme.Name(), "clear", "  the theme is cle
 eq(Theme.BackingAlpha(), Theme.OPACITY.medium, "  at medium")
 check(chatHas("theme"), "  through /gqt, as typed (its own reply is in chat)")
 check(logHas("clear, medium: Screenshot() isn't on this client"), "  a screenshot was asked for (none in the stub)")
+
+-- Restarted part-way (the host runs none of the stopped run's steps), and
+-- step 1 run again after Back: the owner's look is still the one to put back.
+fp("steps gqt look")
+rec = ForeverProbeDB.steps.records["TrackerProbe/look"]
+eq(rec.results[1].check, "PASS", "restarted: step 1 again")
+eq(DB.look.theme, "smoked", "  the unfinished run's theme is kept, not the test's clear")
+eq(DB.look.opacity, "light", "  and its opacity, not medium")
+check(logHas("an unfinished run's settings are kept to put back: smoked, light"), "  and the log says so")
+S.Back(); settle()
+eq(rec.at, 1, "Back to step 1")
+S.Run(); settle()
+eq(DB.look.theme, "smoked", "  step 1 run again keeps them too")
+run(2, "2: clear at medium, restarted")
 run(3, "3: smoked");               eq(Theme.Name(), "smoked", "  smoked")
 run(4, "4: class");                eq(Theme.Name(), "class", "  class")
 run(5, "5: stock");                check(not Panel._test.frame():IsShown(), "  stock: no glass")
@@ -131,31 +145,63 @@ S.Back(); settle()
 WoW.collapse(true)
 nextStep(12, "12: collapsed, the glass on the header")
 WoW.collapse(false); WoW.layout("QuestObjectiveTracker", { blocks = 2 })
+-- A section the owner keeps collapsed: it mustn't count as the one step 15 asks for.
+WoW.collapseModule("CampaignQuestObjectiveTracker", true)
 nextStep(13, "13: expanded, populated again")
+eq(rec.results[14].status, "done", "14: the snapshot for the manual steps, on arrival")
+-- Next without the owner's action fails: the state alone looks the same
+-- (Codex, PR #14).
+local function skipped(i, msg)
+    eq(rec.at, i, "at step " .. i)
+    S.Next(); settle()
+    eq(rec.results[i].check, "FAIL", msg)
+    S.Back(); settle()
+end
+skipped(15, "15: Next without collapsing a section fails")
 WoW.collapseModule("QuestObjectiveTracker", true); WoW.layout("QuestObjectiveTracker", { shown = true })
-nextStep(14, "14: a section collapsed, still populated")
+nextStep(15, "15: a section collapsed, still populated")
+check(rec.results[15].checkDetail:find("QuestObjectiveTracker collapsed", 1, true) ~= nil, "  naming the section")
+skipped(16, "16: Next with the section still collapsed fails")
 WoW.collapseModule("QuestObjectiveTracker", false); WoW.layout("QuestObjectiveTracker", { blocks = 2 })
-nextStep(15, "15: the section expanded")
-answer(16, false)
-WoW.editMode(true); WoW.editMode(false)
-nextStep(17, "17: after Edit Mode")
-answer(18, true)
-eq(rec.results[19].check, "PASS", "19: no failures, on arrival")
-eq(rec.results[20].check, "PASS", "20: the owner's look put back, on arrival")
+nextStep(16, "16: the section expanded")
+answer(17, false)
+skipped(18, "18: Next without Edit Mode fails")
+WoW.editMode(true)
+skipped(18, "18: Edit Mode opened but not closed fails")
+WoW.editMode(false)
+nextStep(18, "18: after Edit Mode, opened and closed")
+answer(19, true)
+eq(rec.results[20].check, "PASS", "20: no failures, on arrival")
+eq(rec.results[21].check, "PASS", "21: the owner's look put back, on arrival")
 eq(Theme.Name(), "smoked", "  their theme")
 eq(Theme.BackingAlpha(), Theme.OPACITY.light, "  their opacity")
-eq(rec.at, 21, "21: the reload step")
+eq(DB.look.pending, false, "  and marked put back")
+eq(rec.at, 22, "22: the reload step")
 
--- A failure recorded by the addon fails step 19 (checked on a fresh walk).
+-- A finished run's snapshot is replaced by the next run's.
+SlashCmdList.GLASSQUESTTRACKER("theme class")
+fp("steps gqt look")
+rec = ForeverProbeDB.steps.records["TrackerProbe/look"]
+eq(DB.look.theme, "class", "a new run after a finished one keeps the look of now")
+eq(DB.look.pending, true, "  to put back")
+SlashCmdList.GLASSQUESTTRACKER("theme clear")
+fp("gqt restore")
+eq(Theme.Name(), "class", "/fp gqt restore puts a stopped run's look back")
+eq(DB.look.pending, false, "  and marks it")
+fp("gqt restore")
+check(logHas("nothing to put back"), "  a second restore has nothing to do")
+
+-- A failure recorded by the addon fails step 20 (checked on a fresh walk).
 GQT.failures["hook:test"] = "no EndLayout"
 fp("steps gqt look")
 rec = ForeverProbeDB.steps.records["TrackerProbe/look"]
-for i = 2, 18 do
+for i = 2, 19 do
     local step = FP.procedures["TrackerProbe/look"].steps[i]
-    if step.run then S.Run() elseif step.ask then S.Answer(true) else S.Skip() end
+    if step.auto then -- ran on arrival
+    elseif step.run then S.Run() elseif step.ask then S.Answer(true) else S.Skip() end
     settle()
 end
-eq(rec.results[19].check, "FAIL", "19: a recorded failure fails the step")
+eq(rec.results[20].check, "FAIL", "20: a recorded failure fails the step")
 check(logHas("failure hook:test: no EndLayout"), "  and is named in the log")
 GQT.failures["hook:test"] = nil
 

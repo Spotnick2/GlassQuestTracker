@@ -53,6 +53,11 @@ saved. With the addon enabled, `/reload`, then `/fp steps gqt look`. It:
   flash, legibility over bright ground), with a screenshot for each visual step;
 - checks that `/gqt failures` is empty, and puts your theme and opacity back.
 
+The manual steps check that you did them: a section newly collapsed then expanded, and Edit Mode
+opened and closed since a snapshot taken just before; Next alone fails. Your theme and opacity are
+kept in `TrackerProbeDB.look` until they're put back, so a run stopped or restarted part-way
+doesn't lose them. `/fp gqt restore` puts them back by hand.
+
 `/fp gqt state` prints the same state at any time. After the closing `/reload`, the results are in
 `ForeverProbe.lua` (`steps.records["TrackerProbe/look"]`), and the screenshot file names are on
 each step (`..\ForeverProbe\Tools\screenshots.ps1 -Module TrackerProbe` lists them).
