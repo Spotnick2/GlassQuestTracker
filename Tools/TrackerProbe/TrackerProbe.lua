@@ -286,11 +286,26 @@ local ROUTINE = {
     { "instance", "enter a dungeon (any instance) with quests tracked" },
 }
 local seen = {}
+-- Collapse is only done when both headers went both ways: the container's
+-- expand is what re-anchors the panel to the NineSlice (Codex, PR #10).
+local collapses = { container = {}, section = {} }
+
+-- A step counts only once a pass is installed: the routine has to exercise
+-- the hooks, not happen before them (Codex, PR #10).
+local function credit(step)
+    if installed then seen[step] = true end
+end
+
+local function collapsed(kind, down)
+    if not installed then return end
+    collapses[kind][down and "collapsed" or "expanded"] = true
+    local c, s = collapses.container, collapses.section
+    if c.collapsed and c.expanded and s.collapsed and s.expanded then seen.collapse = true end
+end
 
 local function count(key)
     counts[key] = (counts[key] or 0) + 1
-    if key:find("^SetCollapsed") then seen.collapse = true end
-    if key == "EditMode:hide" then seen.editmode = true end
+    if key == "EditMode:hide" then credit("editmode") end
 end
 
 local function showRoutine()
@@ -298,6 +313,11 @@ local function showRoutine()
     for _, step in ipairs(ROUTINE) do
         if not seen[step[1]] then missing = missing + 1 end
         say("routine [" .. (seen[step[1]] and "x" or " ") .. "] " .. step[2])
+    end
+    if not seen.collapse then
+        local function done(kind, dir) return collapses[kind][dir] and dir or ("not " .. dir) end
+        say("  collapse so far: tracker " .. done("container", "collapsed") .. ", " .. done("container", "expanded")
+            .. "; section " .. done("section", "collapsed") .. ", " .. done("section", "expanded"))
     end
     say(missing == 0 and "routine complete: log out (don't just /reload) so taint.log is written"
         or ("routine: " .. missing .. " step(s) left"))
@@ -404,6 +424,9 @@ local function install(mode)
     local t = tracker()
     if not t then return say("P6 no tracker") end
     installed = true
+    -- A fresh observation window: nothing done before the hooks counts.
+    for k in pairs(seen) do seen[k] = nil end
+    collapses.container, collapses.section = {}, {}
     panel = CreateFrame("Frame", nil, t)
     panel:SetFrameLevel(t:GetFrameLevel())
     local tex = panel:CreateTexture(nil, "BACKGROUND")
@@ -418,11 +441,18 @@ local function install(mode)
             if mode == "B" then restyleModule(self) end
         end)
         if m.Header and m.Header.SetCollapsed then
-            hooksecurefunc(m.Header, "SetCollapsed", function() count("SetCollapsed:" .. name) end)
+            hooksecurefunc(m.Header, "SetCollapsed", function(_, down)
+                count("SetCollapsed:" .. name)
+                collapsed("section", down)
+            end)
         end
     end
     if t.Header and t.Header.SetCollapsed then
-        hooksecurefunc(t.Header, "SetCollapsed", function() count("SetCollapsed:container"); placePanel() end)
+        hooksecurefunc(t.Header, "SetCollapsed", function(_, down)
+            count("SetCollapsed:container")
+            collapsed("container", down)
+            placePanel()
+        end)
     end
     local em = rawget(_G, "EditModeManagerFrame")
     if em then
@@ -431,6 +461,7 @@ local function install(mode)
     end
     placePanel()
     if mode == "B" then restyleAll() end
+    if IsInInstance() then credit("instance") end   -- installed after entering one
     say("pass " .. mode .. " installed on " .. #list .. " modules (" .. from .. "). Now /console taintLog 1 and run the routine.")
 end
 
@@ -464,7 +495,7 @@ boot:SetScript("OnEvent", function(_, event, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- taint.log is only written while this is on; it isn't saved across sessions.
         local taintLog, inInstance, kind = GetCVar("taintLog"), IsInInstance()
-        if inInstance then seen.instance = true end
+        if inInstance then credit("instance") end
         say("world: taintLog=" .. str(taintLog) .. " instance=" .. str(inInstance) .. "," .. str(kind))
         if db.mode and taintLog == "0" then say("taintLog is OFF: /console taintLog 1 before the routine") end
         -- The tracker's modules arrive after PLAYER_ENTERING_WORLD + VARIABLES_LOADED.
@@ -475,14 +506,14 @@ boot:SetScript("OnEvent", function(_, event, ...)
         -- Also runs on /reload: every session leaves its counts and routine in the log.
         if installed then showCounts(); showRoutine() end
     elseif event == "QUEST_ACCEPTED" then
-        seen.accept = true
+        credit("accept")
         onAccepted(...)
     elseif event == "QUEST_WATCH_UPDATE" then
-        seen.progress = true
+        credit("progress")
     elseif event == "QUEST_TURNED_IN" then
-        seen.turnin = true
+        credit("turnin")
     elseif event == "PLAYER_REGEN_DISABLED" then
-        seen.combat = true
+        credit("combat")
     else
         -- The taint signals: a blocked action names the addon the client blames.
         say("TAINT " .. event .. ": " .. table.concat({ str((...)), str((select(2, ...))) }, " "))

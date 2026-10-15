@@ -30,6 +30,8 @@ collapse and expand by clicking; open Edit Mode, move the tracker, change Text S
 Height; fight; enter a dungeon. Then read `Logs\taint.log` and the error frame (especially
 "Auras cannot be accessed when secret"). **If P6 or P7 shows taint, stop and re-plan.**
 `/gqtprobe routine` lists which steps the session has covered; it's also logged at logout.
+A step counts only after the pass is installed, and collapse only once both the tracker and a
+section have been collapsed **and** expanded.
 
 On 70374, with `taintLog` 1 or 2, hovering any player throws a Blizzard error
 (`TooltipDataHandler.lua:300`, "attempt to call a nil value"; none at 0). It's the logging,
