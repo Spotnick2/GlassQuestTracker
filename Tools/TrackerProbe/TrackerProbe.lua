@@ -1,21 +1,34 @@
--- TrackerProbe: a throwaway measuring addon for Glass Quest Tracker (never shipped).
--- Answers the questions docs/FOREVER-PROBE.md lists, on the live client. Every
--- line goes to chat AND to TrackerProbeDB.log, so the results can be read from
--- WTF\Account\<account>\SavedVariables\TrackerProbe.lua after a /reload or logout.
+-- TrackerProbe: Glass Quest Tracker's developer probe, a ForeverProbe module
+-- (/fp gqt). Never shipped. Its lines go to the ForeverProbe console and to
+-- TrackerProbeDB.log, never to chat; read them from
+-- WTF\Account\<account>\SavedVariables\TrackerProbe.lua after a /reload.
 --
---   /gqtprobe frames       P1 P2 P8 P9: the tracker, its modules, blocks and lines, fonts, other addons
---   /gqtprobe nine         P3: NineSlice and Header anchors, collapsed state; toggles a red overlay on NineSlice
---   /gqtprobe cvars        P4: autoQuestWatch, questPOI, the watch limit
---   /gqtprobe accept on|off|watch   P5: log QUEST_ACCEPTED (watch: also AddQuestWatch from addon code)
---   /gqtprobe hook         P6: taint pass A (hooks + a child panel), kept across /reload
---   /gqtprobe restyle      P7: taint pass B (pass A + fade, blank, shadows, tint), kept across /reload
---   /gqtprobe off          no pass at the next /reload
---   /gqtprobe counts       how often each hook ran
---   /gqtprobe routine      which taint-pass steps this session has covered (also logged at logout)
---   /gqtprobe clear        empty the log
+--   /fp gqt frames       P1 P2 P8 P9: the tracker, its modules, blocks and lines, fonts, other addons
+--   /fp gqt nine         P3: NineSlice and Header anchors, collapsed state; toggles a red overlay on NineSlice
+--   /fp gqt cvars        P4: autoQuestWatch, questPOI, the watch limit
+--   /fp gqt accept on|off|watch   P5: log QUEST_ACCEPTED (watch: also AddQuestWatch from addon code)
+--   /fp gqt hook         P6: taint pass A (hooks + a child panel), kept across /reload
+--   /fp gqt restyle      P7: taint pass B (pass A + fade, blank, shadows, tint), kept across /reload
+--   /fp gqt off          no pass at the next /reload
+--   /fp gqt counts       how often each hook ran
+--   /fp gqt routine      which taint-pass steps this session has covered (also logged at logout)
+--   /fp gqt state        Glass Quest Tracker's look as the addon holds it
+--   /fp gqt clear        empty the log
+--   /fp steps gqt look   #3's in-game checks, a guided procedure with screenshots
+--
+-- The passes are the probe's own stand-ins for the skin (#2). They refuse to
+-- install while Glass Quest Tracker is loaded: two skins on one tracker
+-- measure nothing, and the probe no longer has to be disabled to test the
+-- addon. The host logs ADDON_ACTION_BLOCKED / FORBIDDEN itself.
 --
 -- It follows the addon's own rule: only C widget methods on Blizzard objects,
--- no field writes on their tables, state in our own tables.
+-- no field writes on their tables, state in our own tables. The addon's
+-- state is read through its global table; the look procedure changes it
+-- only with /gqt, as typed, and puts the owner's theme and opacity back.
+
+local ADDON, NS = ...
+local MAX_LOG = 3000
+local Probe = ForeverProbe:Module("TrackerProbe", { api = 1, cmd = "gqt" })
 
 local LOADED_AT_FILE_SCOPE = {
     tracker = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_ObjectiveTracker"),
@@ -23,21 +36,9 @@ local LOADED_AT_FILE_SCOPE = {
 }
 
 local db
-local function str(v)
-    if issecretvalue and issecretvalue(v) then return "<secret>" end
-    return tostring(v)
-end
-
-local function say(...)
-    local parts = {}
-    for i = 1, select("#", ...) do parts[#parts + 1] = str((select(i, ...))) end
-    local line = table.concat(parts, " ")
-    print("|cff7fd4ffgqtprobe|r " .. line)
-    if db then
-        db.log[#db.log + 1] = date("%H:%M:%S") .. " " .. line
-        if #db.log > 3000 then table.remove(db.log, 1) end
-    end
-end
+local function str(v) return Probe.Show(v, true) end
+local function say(msg) Probe:Say(msg) end
+local function secret(v) return issecretvalue ~= nil and issecretvalue(v) == true end
 
 -- A method's results, or "err:..." when it throws.
 local function call(obj, method, ...)
@@ -50,7 +51,16 @@ local function call(obj, method, ...)
     return table.concat(out, ",")
 end
 
+-- A getter's first result as a plain value, or nil (missing, throws, secret).
+local function get(obj, method)
+    if type(obj) ~= "table" or type(obj[method]) ~= "function" then return nil end
+    local ok, v = pcall(obj[method], obj)
+    if not ok or secret(v) then return nil end
+    return v
+end
+
 local function tracker() return rawget(_G, "ObjectiveTrackerFrame") end
+local function addon() return rawget(_G, "GlassQuestTracker") end
 
 local FALLBACK_MODULES = { "ScenarioObjectiveTracker", "UIWidgetObjectiveTracker", "CampaignQuestObjectiveTracker",
     "QuestObjectiveTracker", "AdventureObjectiveTracker", "AchievementObjectiveTracker",
@@ -178,7 +188,7 @@ local function points(f)
     if not f then return "n/a" end
     local ok, n = pcall(f.GetNumPoints, f)
     if not ok then return "err" end
-    if issecretvalue and issecretvalue(n) then return "<secret>" end
+    if secret(n) then return "<secret>" end
     local out = {}
     for i = 1, (type(n) == "number" and n or 0) do
         local p = { pcall(f.GetPoint, f, i) }
@@ -188,7 +198,7 @@ local function points(f)
             local rel = p[3]
             local t = tracker() or {}
             local relName
-            if issecretvalue and issecretvalue(rel) then relName = "<secret>"
+            if secret(rel) then relName = "<secret>"
             elseif rel == nil then relName = "nil"
             elseif rel == t then relName = "tracker"
             elseif rel == t.Header then relName = "Header"
@@ -327,7 +337,7 @@ end
 local function populated()
     for _, m in ipairs((modules())) do
         local ok, shown = pcall(m.IsShown, m)
-        if ok and not (issecretvalue and issecretvalue(shown)) and shown then return true end
+        if ok and not secret(shown) and shown then return true end
     end
     return false
 end
@@ -338,8 +348,8 @@ local function placePanel()
     if not (t and panel) then return end
     panel:ClearAllPoints()
     panel:SetPoint("TOPLEFT", t.NineSlice, "TOPLEFT", 16, 0)
-    local collapsed = t.isCollapsed == true
-    if collapsed or not populated() then
+    local down = t.isCollapsed == true
+    if down or not populated() then
         panel:SetPoint("BOTTOMRIGHT", t.Header, "BOTTOMRIGHT", 0, -4)
         count("panel:header")
     else
@@ -383,8 +393,8 @@ end
 local function tint(button)
     if type(button) ~= "table" or styled[button] then return end
     styled[button] = true
-    for _, get in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
-        local tex = button[get] and button[get](button)
+    for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture" }) do
+        local tex = button[getter] and button[getter](button)
         if tex then tex:SetDesaturated(true); tex:SetVertexColor(0.75, 0.9, 1) end
     end
     local hl = button.GetHighlightTexture and button:GetHighlightTexture()
@@ -419,14 +429,17 @@ local function restyleAll()
     for _, m in ipairs((modules())) do restyleModule(m) end
 end
 
+-- True when the pass is on (installed now, or already this session).
 local function install(mode)
-    if installed then return say("pass already installed this session; /reload to change it") end
+    if installed then say("pass already installed this session; /reload to change it"); return true end
+    if addon() then
+        say("pass " .. mode .. " refused: Glass Quest Tracker is loaded, and its own skin is on the tracker."
+            .. " Disable the addon to run a probe pass.")
+        return false
+    end
     local t = tracker()
-    if not t then return say("P6 no tracker") end
-    installed = true
-    -- A fresh observation window: nothing done before the hooks counts.
-    for k in pairs(seen) do seen[k] = nil end
-    collapses.container, collapses.section = {}, {}
+    if not t then say("P6 no tracker"); return false end
+    installed = true   -- from here on the routine counts (credit)
     panel = CreateFrame("Frame", nil, t)
     panel:SetFrameLevel(t:GetFrameLevel())
     local tex = panel:CreateTexture(nil, "BACKGROUND")
@@ -463,6 +476,7 @@ local function install(mode)
     if mode == "B" then restyleAll() end
     if IsInInstance() then credit("instance") end   -- installed after entering one
     say("pass " .. mode .. " installed on " .. #list .. " modules (" .. from .. "). Now /console taintLog 1 and run the routine.")
+    return true
 end
 
 local function showCounts()
@@ -474,22 +488,288 @@ local function showCounts()
 end
 
 --------------------------------------------------------------------------------
--- Boot and command
+-- Glass Quest Tracker's look, as the addon holds it (#3)
+--------------------------------------------------------------------------------
+
+-- Plain values only, nil where the addon or a region is missing.
+local function lookState()
+    local G = addon()
+    if type(G) ~= "table" or type(G.Panel) ~= "table" or type(G.Panel._test) ~= "table" then return nil end
+    local p, g, t = G.Panel._test.frame(), G.Panel._test.g(), tracker()
+    local failures = 0
+    for _ in pairs(G.failures or {}) do failures = failures + 1 end
+    return {
+        started = G.Skin ~= nil and G.Skin.started == true,
+        theme = G.Theme.Name(),
+        backing = G.Theme.BackingAlpha(),
+        glass = p ~= nil and get(p, "IsShown") == true,
+        panel = G.Panel.state,
+        wash = g ~= nil and get(g.wash, "IsShown") == true,
+        nine = t and get(t.NineSlice, "GetAlpha"),
+        bar = t and t.Header and get(t.Header.Background, "GetAlpha"),
+        collapsed = G.Tracker.IsCollapsed() == true,
+        failures = failures,
+    }
+end
+
+local function describe(s)
+    if not s then return "Glass Quest Tracker isn't loaded" end
+    return ("theme=%s backing=%s glass=%s panel=%s wash=%s nineslice=%s headerbar=%s collapsed=%s failures=%d")
+        :format(str(s.theme), str(s.backing), str(s.glass), str(s.panel), str(s.wash), str(s.nine), str(s.bar),
+            str(s.collapsed), s.failures)
+end
+
+-- The addon's own command, as the owner would type it.
+local function gqt(args)
+    local cmd = SlashCmdList and SlashCmdList.GLASSQUESTTRACKER
+    if type(cmd) ~= "function" then error("/gqt isn't registered: is Glass Quest Tracker loaded?", 0) end
+    cmd(args)
+    local s = lookState()
+    say("/gqt " .. args .. " -> " .. describe(s))
+    return describe(s)
+end
+
+-- Checks: the state, then whether it is what the step wanted.
+local function expect(want)
+    return function()
+        local s = lookState()
+        if not s then return false, describe(s) end
+        for k, v in pairs(want) do
+            if s[k] ~= v then return false, "want " .. k .. "=" .. str(v) .. ": " .. describe(s) end
+        end
+        return true, describe(s)
+    end
+end
+
+-- The glass on: the panel shown, the wash hidden (a gradient ignores
+-- SetAlpha on 70374), the stock background and header bar faded.
+local function glassOn(extra)
+    local want = { started = true, glass = true, wash = false, nine = 0, bar = 0 }
+    for k, v in pairs(extra or {}) do want[k] = v end
+    return expect(want)
+end
+
+local function opacity(name)
+    local G = addon()
+    return G and G.Theme and G.Theme.OPACITY and G.Theme.OPACITY[name]
+end
+
+-- The owner's own theme and opacity, kept in TrackerProbeDB until they're
+-- put back: a run stopped or restarted part-way (the host doesn't run its
+-- remaining steps) must not replace them with the test's (Codex, PR #14).
+local function keepLook()
+    local G = addon()
+    if not (G and G.db) then return end
+    if db.look and db.look.pending then
+        say("an unfinished run's settings are kept to put back: " .. str(db.look.theme) .. ", " .. str(db.look.opacity))
+        return
+    end
+    db.look = { theme = G.Theme.Name(), opacity = G.db.opacity or "medium", pending = true }
+end
+
+-- Puts them back; true once the addon holds them again.
+local function restoreLook()
+    local was = db.look
+    if not (was and was.pending) then say("nothing to put back"); return false end
+    gqt("theme " .. was.theme)
+    gqt("opacity " .. was.opacity)
+    local s = lookState()
+    if s and s.theme == was.theme and s.backing == opacity(was.opacity) then
+        was.pending = false
+        return true
+    end
+    return false
+end
+
+-- What the owner's hands did, which the state alone can't show: a section
+-- may already have been expanded, and Edit Mode leaves no trace (Codex,
+-- PR #14). Sections by Blizzard's own field (Module.lua:480), read only.
+local editMode = { shown = 0, hidden = 0 }
+local before   -- the snapshot the manual steps compare against
+
+local function collapsedSections()
+    local set = {}
+    for _, m in ipairs((modules())) do
+        if m.isCollapsed == true then set[m] = true end
+    end
+    return set
+end
+
+local function hookEditMode()
+    local em = rawget(_G, "EditModeManagerFrame")
+    if type(em) ~= "table" or type(em.HookScript) ~= "function" then return false end
+    em:HookScript("OnShow", function() editMode.shown = editMode.shown + 1 end)
+    em:HookScript("OnHide", function() editMode.hidden = editMode.hidden + 1 end)
+    return true
+end
+
+-- The snapshot lives in this file's locals, so a /reload loses it while the
+-- host resumes the procedure at the same step (Codex, PR #14). Without it a
+-- manual step can't be judged: it fails, and says how to take it again.
+local LOST = "no snapshot (a /reload since it was taken): go Back to the 'Noting' step, press Run, then redo this step"
+
+-- A section collapsed since the snapshot, or nil.
+local function sectionDown()
+    if not before then return nil end
+    for m in pairs(collapsedSections()) do
+        if not before.sections[m] then return m end
+    end
+end
+
+Probe:Steps("look", {
+    title = "Glass Quest Tracker: the glass look (#3)",
+    rev = 3,
+    { text = "Reading Glass Quest Tracker's state, and your theme and opacity, to put back at the end.",
+      auto = true, run = function()
+          keepLook()
+          return describe(lookState())
+      end,
+      check = function()
+          local s = lookState()
+          return s ~= nil and s.started, describe(s)
+      end },
+    { text = "Clear glass at medium opacity: the baseline. Have a few quests tracked and the tracker expanded, then press Clear.",
+      button = "Clear", run = function() gqt("theme clear"); return gqt("opacity medium") end,
+      check = glassOn({ theme = "clear" }), screenshot = "clear, medium" },
+    { text = "Smoked glass.", button = "Smoked", run = function() return gqt("theme smoked") end,
+      check = glassOn({ theme = "smoked" }), screenshot = "smoked" },
+    { text = "Class colour glass.", button = "Class", run = function() return gqt("theme class") end,
+      check = glassOn({ theme = "class" }), screenshot = "class" },
+    { text = "Blizzard's own tracker: the stock theme.", button = "Stock", run = function() return gqt("theme stock") end,
+      check = expect({ theme = "stock", glass = false, bar = 1 }), screenshot = "stock" },
+    { text = "Does it look exactly like Blizzard's own tracker: the gold header bars and gold buttons back, no glass?",
+      ask = true },
+    { text = "Back to clear glass.", button = "Clear", run = function() return gqt("theme clear") end,
+      check = glassOn({ theme = "clear" }) },
+    { text = "Opacity light: more of the world shows through.", button = "Light",
+      run = function() return gqt("opacity light") end,
+      check = function()
+          local s = lookState()
+          return s ~= nil and s.backing == opacity("light"), describe(s)
+      end, screenshot = "opacity light" },
+    { text = "Opacity solid.", button = "Solid", run = function() return gqt("opacity solid") end,
+      check = function()
+          local s = lookState()
+          return s ~= nil and s.backing == opacity("solid"), describe(s)
+      end, screenshot = "opacity solid" },
+    { text = "Back to medium.", button = "Medium", run = function() return gqt("opacity medium") end,
+      check = function()
+          local s = lookState()
+          return s ~= nil and s.backing == opacity("medium"), describe(s)
+      end },
+    { text = "Look at the '-' button right of the 'Quests' section title. Is it fully on the glass, with a little glass to its right?",
+      ask = true, screenshot = "right edge" },
+    { text = "Collapse the whole tracker: click the button at the top right, beside 'All Objectives'. Then press Next.",
+      check = glassOn({ collapsed = true, panel = "header" }), screenshot = "collapsed" },
+    { text = "Expand it again, then press Next.",
+      check = glassOn({ collapsed = false, panel = "populated" }) },
+    { text = "Noting which sections are collapsed now, and Edit Mode's opens and closes so far.", auto = true,
+      run = function()
+          before = { sections = collapsedSections(), shown = editMode.shown, hidden = editMode.hidden }
+          local n = 0
+          for _ in pairs(before.sections) do n = n + 1 end
+          return n .. " collapsed, Edit Mode " .. editMode.shown .. "/" .. editMode.hidden
+      end },
+    { text = "Collapse the 'Quests' section with its '-' button, then press Next.",
+      check = function()
+          if not before then return false, LOST end
+          local m = sectionDown()
+          local ok, why = glassOn({ panel = "populated" })()
+          if not m then return false, "no section was collapsed since the snapshot: " .. why end
+          before.down = m   -- the one the next step must see expanded
+          return ok, moduleName(m) .. " collapsed; " .. why
+      end, screenshot = "section collapsed" },
+    { text = "Expand the section again, then press Next.",
+      check = function()
+          if not before then return false, LOST end
+          local m = before.down
+          if not m then return false, "no section was collapsed at the step before: go Back and collapse one" end
+          local ok, why = glassOn({ panel = "populated" })()
+          if m.isCollapsed == true then return false, moduleName(m) .. " is still collapsed: " .. why end
+          return ok, moduleName(m) .. " expanded; " .. why
+      end },
+    { text = "While you did that (or when a section first appeared), did you see any gold bar or shine flash behind a section title? Note when.",
+      ask = true },
+    { text = "Open Edit Mode, click the tracker, drag it a little and change its Height. Then close Edit Mode (Save or Revert) and press Next.",
+      check = function()
+          if not before then return false, LOST end
+          local ok, why = glassOn({ panel = "populated" })()
+          local opened = editMode.shown > before.shown
+          local closed = editMode.hidden > before.hidden
+          if not (opened and closed) then
+              return false, "Edit Mode wasn't " .. (opened and "closed" or "opened") .. " since the snapshot: " .. why
+          end
+          return ok, why
+      end, screenshot = "after Edit Mode" },
+    { text = "Stand or turn so the tracker is over bright ground or sky. Is every line easy to read?",
+      ask = true, screenshot = "bright background" },
+    { text = "Glass Quest Tracker's failures (/gqt failures).", auto = true,
+      run = function()
+          local G, keys = addon(), {}
+          for k, v in pairs(G and G.failures or {}) do keys[#keys + 1] = k .. ": " .. str(v) end
+          table.sort(keys)
+          for _, k in ipairs(keys) do say("failure " .. k) end
+          return #keys
+      end,
+      check = function()
+          local s = lookState()
+          return s ~= nil and s.failures == 0, describe(s)
+      end },
+    { text = "Putting your theme and opacity back.", auto = true,
+      run = function()
+          restoreLook()
+          return describe(lookState())
+      end,
+      check = function()
+          local was, s = db.look or {}, lookState()
+          return s ~= nil and s.theme == was.theme and s.backing == opacity(was.opacity),
+              describe(s)
+      end },
+    { text = "That's all. Type /reload (or press Reload now) so the results and the screenshot names are saved.",
+      reload = true },
+})
+
+--------------------------------------------------------------------------------
+-- Commands
+--------------------------------------------------------------------------------
+
+Probe:Command("frames", function() frames() end, "P1 P2 P8 P9: the tracker, modules, blocks, fonts, other addons")
+Probe:Command("nine", function() nine() end, "P3: NineSlice and Header anchors; toggles a red overlay")
+Probe:Command("cvars", function() cvars() end, "P4: autoQuestWatch, questPOI, the watch limit")
+Probe:Command("accept", function(args)
+    local arg = (args or ""):lower():match("^%s*(%S*)")
+    db.accept = (arg == "on" and true) or (arg == "watch" and "watch") or nil
+    say("accept logging: " .. str(db.accept))
+end, "on|off|watch - P5: log QUEST_ACCEPTED (watch: also AddQuestWatch)")
+-- Kept across /reload only when it installed: a refused pass isn't retried.
+Probe:Command("hook", function() if install("A") then db.mode = "A" end end, "P6: taint pass A, kept across /reload")
+Probe:Command("restyle", function() if install("B") then db.mode = "B" end end, "P7: taint pass B, kept across /reload")
+Probe:Command("off", function() db.mode = nil; say("no pass at the next /reload") end, "no pass at the next /reload")
+Probe:Command("counts", function() showCounts() end, "how often each hook ran")
+Probe:Command("routine", function() showRoutine() end, "which taint-pass steps this session has covered")
+Probe:Command("state", function() say(describe(lookState())) end, "Glass Quest Tracker's look as the addon holds it")
+Probe:Command("restore", function()
+    if restoreLook() then say("your theme and opacity are back") end
+end, "put back the theme and opacity a stopped look run changed")
+Probe:Command("clear", function() Probe:ClearLog(); say("log cleared") end, "empty the saved log")
+
+--------------------------------------------------------------------------------
+-- Boot
 --------------------------------------------------------------------------------
 
 local boot = CreateFrame("Frame")
-for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "QUEST_ACCEPTED",
-    "QUEST_WATCH_UPDATE", "QUEST_TURNED_IN", "PLAYER_REGEN_DISABLED",
-    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN", "LUA_WARNING" }) do
-    boot:RegisterEvent(e)
-end
+Probe:RegisterEvents(boot, { "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "QUEST_ACCEPTED",
+    "QUEST_WATCH_UPDATE", "QUEST_TURNED_IN", "PLAYER_REGEN_DISABLED", "LUA_WARNING" })
 boot:SetScript("OnEvent", function(_, event, ...)
-    if event == "ADDON_LOADED" and ... == "TrackerProbe" then
-        TrackerProbeDB = type(TrackerProbeDB) == "table" and TrackerProbeDB or {}
+    if event == "ADDON_LOADED" and ... == ADDON then
+        Probe:Ready()
+        if type(TrackerProbeDB) ~= "table" then TrackerProbeDB = {} end
         db = TrackerProbeDB
-        db.log = type(db.log) == "table" and db.log or {}
+        if type(db.log) ~= "table" then db.log = {} end
+        Probe:UseLog(db.log, MAX_LOG)
+        if not hookEditMode() then say("no EditModeManagerFrame: the look procedure's Edit Mode step can't pass") end
         say("session start, build " .. table.concat({ GetBuildInfo() }, " ") .. ", pass=" .. str(db.mode)
-            .. ", accept=" .. str(db.accept))
+            .. ", accept=" .. str(db.accept) .. ", Glass Quest Tracker " .. (addon() and "loaded" or "not loaded"))
     elseif not db or event == "ADDON_LOADED" then
         return
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -500,7 +780,9 @@ boot:SetScript("OnEvent", function(_, event, ...)
         if db.mode and taintLog == "0" then say("taintLog is OFF: /console taintLog 1 before the routine") end
         -- The tracker's modules arrive after PLAYER_ENTERING_WORLD + VARIABLES_LOADED.
         if db.mode and not installed then
-            C_Timer.After(1, function() install(db.mode) end)
+            C_Timer.After(1, function()
+                if not install(db.mode) then db.mode = nil end   -- refused: forget it
+            end)
         end
     elseif event == "PLAYER_LOGOUT" then
         -- Also runs on /reload: every session leaves its counts and routine in the log.
@@ -514,28 +796,9 @@ boot:SetScript("OnEvent", function(_, event, ...)
         credit("turnin")
     elseif event == "PLAYER_REGEN_DISABLED" then
         credit("combat")
-    else
-        -- The taint signals: a blocked action names the addon the client blames.
-        say("TAINT " .. event .. ": " .. table.concat({ str((...)), str((select(2, ...))) }, " "))
+    elseif event == "LUA_WARNING" then
+        say("LUA_WARNING " .. str((select(2, ...)) or (...)))
     end
 end)
 
-SLASH_TRACKERPROBE1 = "/gqtprobe"
-SlashCmdList.TRACKERPROBE = function(msg)
-    local cmd, arg = (msg or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
-    if cmd == "frames" then frames()
-    elseif cmd == "nine" then nine()
-    elseif cmd == "cvars" then cvars()
-    elseif cmd == "accept" then
-        db.accept = (arg == "on" and true) or (arg == "watch" and "watch") or nil
-        say("accept logging: " .. str(db.accept))
-    elseif cmd == "hook" then db.mode = "A"; install("A")
-    elseif cmd == "restyle" then db.mode = "B"; install("B")
-    elseif cmd == "off" then db.mode = nil; say("no pass at the next /reload")
-    elseif cmd == "counts" then showCounts()
-    elseif cmd == "routine" then showRoutine()
-    elseif cmd == "clear" then db.log = {}; say("log cleared")
-    else
-        say("frames | nine | cvars | accept on|off|watch | hook | restyle | off | counts | routine | clear")
-    end
-end
+NS._test = { Probe = Probe, lookState = lookState, credit = credit, seen = seen }
