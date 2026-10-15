@@ -23,7 +23,7 @@ invent a new idiom.
 - **MIT.** Questie is GPL: ideas only, never its code or icons. QuestieDB is only ever an optional,
   separately installed dependency.
 
-**Status:** milestone 1 (scaffold, #1). The probe (#2) gates the skin.
+**Status:** milestone 3, the glass look (#3). The probe passed the taint gate on 70374 (#2).
 
 ## The UI contract (non-negotiable)
 
@@ -63,12 +63,16 @@ From `..\wow-ui-source` (branch `forever`, 70338) and the 70374 API dump:
 
 | File | What |
 |---|---|
-| `Compat.lua` | `API.*`: failures, events, version, `CVarBool`, `ClassColor`, Settings registration |
+| `Compat.lua` | `API.*`: failures, events, version, `CVarBool`, `ClassColor`, Settings registration; `Fade`/`Blank`/`Tint` and their `Un-` restores |
 | `Glass.lua` | our LibGlass instance (`preset = "clean"`) |
+| `Theme.lua` | clear / smoked / class / stock, the backing opacity, `Refresh` |
+| `Tracker.lua` | read-only resolvers: the frame, NineSlice, Header, modules, pooled extras |
+| `Blizzard.lua` | what is faded, blanked and tinted, and `Restore` (the stock theme) |
+| `Panel.lua` | the glass, a child of the tracker; bottom anchor by state |
+| `Skin.lua` | the `EndLayout` / `SetCollapsed` / Edit Mode hooks, the first pass, `Apply` |
 | `GlassQuestTracker.lua` | bootstrap, `GlassQuestTrackerDB`, `/gqt` |
 
-Planned, per docs/PLAN.md: `Theme`, `Tracker`, `Blizzard`, `Panel`, `Skin`, `AutoTrack`,
-`Options`, and `Tools\TrackerProbe\`.
+Planned, per docs/PLAN.md: `AutoTrack`, `Options`. `Tools\TrackerProbe\` is the measuring addon (never shipped).
 
 ## References
 

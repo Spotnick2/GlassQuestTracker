@@ -74,3 +74,10 @@ Decursive, DBM loaded.
   is still unmeasured.
 - **Blizzard bugs seen (not ours):** `PetActionBar.lua:123` calls `HasPetActionHighlightMark`,
   which this client lacks; the tooltip error above with `taintLog` on.
+
+**1.60.1.70374, 2026-10-15** (the glass look, #3, read with `/run`):
+- **A gradient texture ignores `SetAlpha`.** LibGlass's wash read `true 1` after Theme had set it
+  to 0, and its white gradient greyed the panel's upper half. Painting it through the gradient and
+  hiding it at zero fixed it (`false 1`). The same as GlassActionBars measured on 10-13; LibGlass's
+  probe then showed that order and texture kind don't matter (porting guide §3, "A gradient texture
+  ignores SetAlpha"). `tests/wow_stubs.lua` models it.
