@@ -120,3 +120,28 @@ rendering or the live client's data: that's the probe and the in-game checklist.
   measured.
 - `GQT.failures` is the one failure record (`API.Fail`, `API.Try`); `/gqt failures` reads it.
 - `GlassQuestTrackerDB` saves only what differs from `DEFAULTS`.
+
+## Consulting Codex
+
+The shared `codex-consult` skill (user level) has the invocation and the gotchas. For this repo:
+
+For Glass Quest Tracker, good things to hand Codex:
+- anything that hooks, fades, blanks or reads Blizzard's `ObjectiveTrackerFrame` (an Edit Mode
+  system and a right-managed frame): the "C methods only" rule in `CLAUDE.md`, and whether a
+  change could run Blizzard's tracker Lua from our code (measured to taint on this client);
+- anything that adds or removes quest watches (`AutoTrack.lua`);
+- anything that writes to SavedVariables;
+- any plan that grows scope toward a full replacement tracker (the own-list mode is deferred by
+  the owner) or toward Questie (GPL: ideas only, never its code or icons);
+- the phase-2 marker library (`LibQuestMarkers-1.0`): its upgrade rules are LibGlass's.
+
+**Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
+were measured on the live client. Without them, a cold reviewer argues from Classic-era or Retail
+behaviour that doesn't hold here (that the Classic `QuestWatchFrame` exists, that calling the
+tracker's own methods is harmless).
+`C:/Projects/WoW/References/Forever/api/` (its newest `forever-api-*.md`) is the full API surface when a question
+turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
+client's own FrameXML (`Blizzard_ObjectiveTracker`). The design references are
+`C:/Projects/WoW/References/Addons/QuestsLeveling/Questie` (GPL) and `C:/Projects/WoW/References/Addons/UISuites/ForeverUI` (its
+`Modules/Quests` measured the tracker's taint); behaviour references only, their code is never copied.
