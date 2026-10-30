@@ -23,7 +23,9 @@ invent a new idiom.
 - **MIT.** Questie is GPL: ideas only, never its code or icons. QuestieDB is only ever an optional,
   separately installed dependency.
 
-**Status:** milestone 3, the glass look (#3). The probe passed the taint gate on 70374 (#2).
+**Status:** parked (2026-10-30) after milestone 3, the glass look (#3, merged), until a new idea
+earns it a next step. The probe passed the taint gate on 70374 (#2). Next per the plan: milestone 4,
+auto-track.
 
 ## The UI contract (non-negotiable)
 
@@ -99,7 +101,7 @@ pwsh tests\run.ps1                                                   # luac -p o
 pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ ForeverProbe and TrackerProbe) into AddOns
 ```
 
-- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns`.
+- Default AddOns path: `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`.
 - In game: `/console scriptErrors 1`, `/reload`, **then** `/console taintLog 1` (a `/reload` puts it
   back to 0 on 70374). `/reload` also loads a new addon folder (ForeverProbe guide, section 7).
 - The probe: `/fp gqt` lists its commands; `/fp steps gqt look` walks #3's checks. Read
@@ -132,3 +134,28 @@ rendering or the live client's data: that's the probe and the in-game checklist.
   measured.
 - `GQT.failures` is the one failure record (`API.Fail`, `API.Try`); `/gqt failures` reads it.
 - `GlassQuestTrackerDB` saves only what differs from `DEFAULTS`.
+
+## Consulting Codex
+
+The shared `codex-consult` skill (user level) has the invocation and the gotchas. For this repo:
+
+For Glass Quest Tracker, good things to hand Codex:
+- anything that hooks, fades, blanks or reads Blizzard's `ObjectiveTrackerFrame` (an Edit Mode
+  system and a right-managed frame): the "C methods only" rule in `CLAUDE.md`, and whether a
+  change could run Blizzard's tracker Lua from our code (measured to taint on this client);
+- anything that adds or removes quest watches (`AutoTrack.lua`);
+- anything that writes to SavedVariables;
+- any plan that grows scope toward a full replacement tracker (the own-list mode is deferred by
+  the owner) or toward Questie (GPL: ideas only, never its code or icons);
+- the phase-2 marker library (`LibQuestMarkers-1.0`): its upgrade rules are LibGlass's.
+
+**Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
+were measured on the live client. Without them, a cold reviewer argues from Classic-era or Retail
+behaviour that doesn't hold here (that the Classic `QuestWatchFrame` exists, that calling the
+tracker's own methods is harmless).
+`C:/Projects/WoW/References/Forever/api/` (its newest `forever-api-*.md`) is the full API surface when a question
+turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
+client's own FrameXML (`Blizzard_ObjectiveTracker`). The design references are
+`C:/Projects/WoW/References/Addons/QuestsLeveling/Questie` (GPL) and `C:/Projects/WoW/References/Addons/UISuites/ForeverUI` (its
+`Modules/Quests` measured the tracker's taint); behaviour references only, their code is never copied.
