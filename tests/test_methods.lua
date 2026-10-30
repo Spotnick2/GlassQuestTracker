@@ -26,8 +26,19 @@ f:close()
 WoW.methodsCalled = {}
 local GQT = loadAddon()
 
--- Every command; later milestones add their handlers here.
-for _, cmd in ipairs({ "failures", "version", "help", "" }) do
+-- Every handler the skin installs: layouts with every pooled extra, both
+-- collapses, Edit Mode, Blizzard re-showing faded art; then every command,
+-- each theme and opacity, stock and back.
+WoW.layout("QuestObjectiveTracker", { blocks = 2, items = 1, groups = 1, bars = 1 })
+WoW.collapseModule("QuestObjectiveTracker", true)
+WoW.collapse(true)
+WoW.layout("QuestObjectiveTracker", { blocks = 2 })
+WoW.collapse(false)
+WoW.editMode(true)
+WoW.editMode(false)
+WoW.asBlizzard(function() ObjectiveTrackerFrame.NineSlice:SetAlpha(0.6) end)
+for _, cmd in ipairs({ "failures", "version", "help", "", "theme smoked", "theme class", "opacity solid",
+                       "theme stock", "theme clear", "theme", "opacity" }) do
     GQT._test.slash(cmd)
 end
 WoW.flushTimers()
@@ -38,7 +49,7 @@ for name in pairs(WoW.methodsCalled) do
     local method = name:match(":(%a+)$")
     check(widget[name] or documented[method], "method exists on Forever: " .. name)
 end
-check(n > 1, "recorded a realistic number of methods (raise it as features land) (" .. n .. ")")
+check(n > 35, "recorded a realistic number of methods (raise it as features land) (" .. n .. ")")
 eq(next(GQT.failures), nil, "no failures recorded while exercising everything")
 for k, v in pairs(GQT.failures) do io.write("    " .. k .. ": " .. v .. "\n") end
 done("test_methods")

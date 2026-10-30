@@ -7,8 +7,9 @@
 --
 -- An instance, not the library itself: its tuning and font registry are
 -- Glass Quest Tracker's own and never touch another glass addon's surfaces.
--- The clean material (r6): thin rectangular rims, no grain. No textures of
--- our own: Glass.MEDIA is the library's folder.
+-- The clean material (r6): thin rectangular rims, no grain; the panel adds
+-- r9's reflective shell (Panel.lua). No textures of our own: Glass.MEDIA is
+-- the library's folder.
 
 GlassQuestTracker = GlassQuestTracker or {}
 GlassQuestTracker.Glass = LibStub("LibGlass-1.0"):New({ preset = "clean" })

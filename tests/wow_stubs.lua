@@ -12,7 +12,7 @@
 -- - The widget METATABLE is a real method table, like the client's.
 
 WoW = {}
-WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70374.md"
+WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70450.md"
 
 --------------------------------------------------------------------------------
 -- Known events (from the dump when present)
@@ -52,6 +52,9 @@ WoW.Methods = Methods
 
 local function record(w, name)
     WoW.methodsCalled[(rawget(w, "_type") or "?") .. ":" .. name] = true
+    -- A call on a Blizzard object from addon code (not from the simulated
+    -- Blizzard side): test_contract checks each against the C-only allowlist.
+    if rawget(w, "_blizz") and not WoW.inBlizzard then WoW.blizzCalls[name] = (WoW.blizzCalls[name] or 0) + 1 end
 end
 
 -- The shared method table: any Capitalised name is a method (a no-op unless
@@ -126,7 +129,14 @@ function Methods.GetCenter(w) return w._cx, w._cy end
 function Methods.GetEffectiveScale(w) return w._effScale or 1 end
 function Methods.SetScale(w, s) w._scale = s end
 function Methods.GetScale(w) return w._scale end
-function Methods.SetAlpha(w, a) w._alpha = a end
+-- A gradient texture ignores SetAlpha on this client (GlassActionBars'
+-- /gab inspect, 2026-10-13: its wash read 1.00 right after SetAlpha(0); here
+-- too, 70374, 2026-10-15), so the stub ignores it as well: only the
+-- gradient's own colours set its alpha.
+function Methods.SetAlpha(w, a)
+    if w._gradient then return end
+    w._alpha = a
+end
 function Methods.GetAlpha(w) return w._alpha end
 function Methods.GetFrameLevel(w) return w._level end
 function Methods.SetFrameLevel(w, l) w._level = l end
@@ -176,6 +186,14 @@ function Methods.SetNormalTexture(w, file) w._normal = newWidget("Texture", w); 
 function Methods.GetNormalTexture(w) return w._normal end
 function Methods.SetCheckedTexture(w, file) w._checkedTex = newWidget("Texture", w) end
 function Methods.GetCheckedTexture(w) return w._checkedTex end
+function Methods.GetPushedTexture(w) return w._pushed end
+function Methods.GetDisabledTexture(w) return w._disabled end
+function Methods.SetDesaturated(t, v) t._desat = v and true or false end
+function Methods.IsDesaturated(t) return t._desat == true end
+function Methods.GetVertexColor(t)
+    local c = t._vertex or { 1, 1, 1, 1 }
+    return c[1], c[2], c[3], c[4] or 1
+end
 
 -- Animations: Play marks a group playing; WoW.finishAnimations() completes
 -- every playing group (OnFinished), as the client would after its duration.
@@ -258,6 +276,8 @@ function Methods.RemoveMaskTexture(t, m)
 end
 function Methods.SetGradient(t, orientation, c1, c2)
     assert(type(c1) == "table" and type(c2) == "table", "SetGradient takes color objects on this API")
+    t._gradient = { orientation, c1, c2 }
+    t._alpha = 1
 end
 function Methods.SetFont(fs, file, size, flags) fs._font = { file, size, flags }; return true end
 
@@ -273,6 +293,243 @@ end
 function Methods.AddDoubleLine(tt, l, r) table.insert(tt._lines, tostring(l) .. "|" .. tostring(r)) end
 
 --------------------------------------------------------------------------------
+-- Blizzard's objective tracker (Mainline, as Forever runs it: wow-ui-source
+-- branch forever, measured on 70374)
+--------------------------------------------------------------------------------
+
+-- A Blizzard object: a NEW key written from addon code is trapped here;
+-- a changed EXISTING key is caught by WoW.fieldChanges() against the
+-- snapshot. Keys starting with "_" are the stub's own bookkeeping.
+local blizzMT = {
+    __index = MethodTable,
+    __newindex = function(t, k, v)
+        if type(k) == "string" and k:sub(1, 1) == "_" then return rawset(t, k, v) end
+        if not WoW.inBlizzard then table.insert(WoW.fieldWrites, tostring(k)) end
+        rawset(t, k, v)
+    end,
+}
+
+local function blizz(wtype, parent, name)
+    local w = setmetatable(newWidget(wtype, parent, name), blizzMT)
+    rawset(w, "_blizz", true)
+    table.insert(WoW.blizz, w)
+    return w
+end
+
+local function blizzTexture(parent, atlas)
+    local t = blizz("Texture", parent)
+    t._atlas = atlas
+    return t
+end
+
+local function blizzButton(parent, normal, pushed, highlight, disabled)
+    local b = blizz("Button", parent)
+    b._normal = blizzTexture(b, normal)
+    b._pushed = blizzTexture(b, pushed)
+    b._highlight = blizzTexture(b, highlight)
+    if disabled then b._disabled = blizzTexture(b, disabled) end
+    return b
+end
+
+-- Blizzard's side writes its own fields through here: the snapshot follows.
+function WoW.bset(t, k, v)
+    rawset(t, k, v)
+    if WoW.snap[t] then WoW.snap[t][k] = v end
+end
+
+-- A Lua method on a Blizzard object (a mixin copy): calling one from addon
+-- code is recorded (WoW.luaCalls) as well as run.
+local function luaMethod(obj, name, fn)
+    rawset(obj, name, function(self, ...)
+        if not WoW.inBlizzard then table.insert(WoW.luaCalls, name) end
+        local was = WoW.inBlizzard
+        WoW.inBlizzard = true
+        local r = fn(self, ...)
+        WoW.inBlizzard = was
+        return r
+    end)
+end
+
+local function makeHeader(parent, bgAtlas, collapse, expand, withAnim)
+    local h = blizz("Frame", parent)
+    h.Background = blizzTexture(h, bgAtlas)
+    h.Text = blizz("FontString", h)
+    h.MinimizeButton = blizzButton(h, collapse, collapse .. "-pressed", "ui-questtrackerbutton-red-highlight")
+    if withAnim then
+        h.Shine = blizzTexture(h, "UI-QuestTracker-OBJFX-Shine")
+        h.Glow = blizzTexture(h, "UI-QuestTracker-OBJFX-BarGlow")
+        h.Shine._alpha, h.Glow._alpha = 0, 0
+    end
+    luaMethod(h, "SetCollapsed", function(self, collapsed)
+        local n, p = self.MinimizeButton:GetNormalTexture(), self.MinimizeButton:GetPushedTexture()
+        n:SetAtlas(collapsed and expand or collapse)
+        p:SetAtlas((collapsed and expand or collapse) .. "-pressed")
+    end)
+    return h
+end
+
+WoW.MODULE_NAMES = { "ScenarioObjectiveTracker", "UIWidgetObjectiveTracker", "CampaignQuestObjectiveTracker",
+    "QuestObjectiveTracker", "AdventureObjectiveTracker", "AchievementObjectiveTracker",
+    "MonthlyActivitiesObjectiveTracker", "InitiativeTasksObjectiveTracker", "ProfessionsRecipeTracker",
+    "BonusObjectiveTracker", "WorldQuestObjectiveTracker" }
+
+-- A module in the container's list. Named, as the client's are; with no
+-- global of its name, it's one a later build added.
+function WoW.addModule(name)
+    local t = ObjectiveTrackerFrame
+    local m
+    WoW.asBlizzard(function()
+        m = blizz("Frame", t, name)
+        m._shown = false
+        m.Header = makeHeader(m, "UI-QuestTracker-Secondary-Objective-Header",
+            "ui-questtrackerbutton-secondary-collapse", "ui-questtrackerbutton-secondary-expand", true)
+        m.usedBlocks = {}
+        luaMethod(m, "EndLayout", function() end)
+        table.insert(t.modules, m)
+        WoW.snapshot()
+    end)
+    return m
+end
+
+local function makeTracker()
+    local t = blizz("Frame", UIParent, "ObjectiveTrackerFrame")
+    t._width, t._height = 260, 800
+    rawset(_G, "ObjectiveTrackerFrame", t)
+    t.NineSlice = blizz("Frame", t)
+    t.NineSlice._level = t._level
+    t.NineSlice._alpha = 0
+    t.Header = makeHeader(t, "ui-questtracker-primary-objective-header", "ui-questtrackerbutton-collapse-all",
+        "ui-questtrackerbutton-expand-all")
+    t.Header.FilterButton = blizzButton(t.Header, "ui-questtrackerbutton-filter",
+        "ui-questtrackerbutton-filter-pressed", "ui-questtrackerbutton-red-highlight")
+    t.Header.FilterButton._shown = false
+    t.isCollapsed = false
+    t.modules = {}
+    for _, name in ipairs(WoW.MODULE_NAMES) do
+        rawset(_G, name, WoW.addModule(name))
+    end
+    local em = blizz("Frame", UIParent, "EditModeManagerFrame")
+    em._shown = false
+    rawset(_G, "EditModeManagerFrame", em)
+    WoW.snapshot()
+end
+
+function WoW.makeTracker() WoW.asBlizzard(makeTracker) end
+
+-- The plain fields of every Blizzard object not yet snapshotted, as
+-- Blizzard's side built them.
+function WoW.snapshot()
+    for _, w in ipairs(WoW.blizz) do
+        if not WoW.snap[w] then
+            local s = {}
+            for k, v in pairs(w) do
+                if type(k) ~= "string" or k:sub(1, 1) ~= "_" then s[k] = v end
+            end
+            WoW.snap[w] = s
+        end
+    end
+end
+
+-- Fields an addon changed or added since the snapshot (hooksecurefunc's own
+-- wrapper excepted), as "key" strings.
+function WoW.fieldChanges()
+    local out = {}
+    for _, w in ipairs(WoW.blizz) do
+        local s, hooked = WoW.snap[w] or {}, WoW.hookedKeys[w] or {}
+        for k, v in pairs(w) do
+            if (type(k) ~= "string" or k:sub(1, 1) ~= "_") and not hooked[k] and s[k] ~= v then
+                out[#out + 1] = tostring(k)
+            end
+        end
+    end
+    for _, k in ipairs(WoW.fieldWrites) do out[#out + 1] = k end
+    return out
+end
+
+-- Run fn as Blizzard's own code.
+function WoW.asBlizzard(fn, ...)
+    local was = WoW.inBlizzard
+    WoW.inBlizzard = true
+    fn(...)
+    WoW.inBlizzard = was
+end
+
+-- One layout of module `name` (a global name, or the module), the way the container drives it: the pools
+-- this layout uses (spec.items item buttons, spec.groups find-group buttons,
+-- spec.bars progress bars), shown when it has anything, then EndLayout. The
+-- NineSlice's BOTTOM follows the last shown module (Container.lua:117).
+function WoW.layout(name, spec)
+    spec = spec or {}
+    local t, m = ObjectiveTrackerFrame, type(name) == "table" and name or rawget(_G, name)
+    WoW.asBlizzard(function()
+        local edge = {}
+        for i = 1, spec.items or 0 do
+            local key = "item" .. i
+            edge[key] = (m.usedRightEdgeFrames or {})[key] or blizzButton(m, "UI-QuestTrackerButton-QuestItem-Frame",
+                "UI-QuestTrackerButton-QuestItem-Frame", nil)
+        end
+        for i = 1, spec.groups or 0 do
+            local key = "group" .. i
+            edge[key] = (m.usedRightEdgeFrames or {})[key] or blizzButton(m, nil, nil, nil, "disabled")
+        end
+        WoW.bset(m, "usedRightEdgeFrames", edge)
+        local bars = {}
+        for i = 1, spec.bars or 0 do
+            local key = "bar" .. i
+            local p = (m.usedProgressBars or {})[key]
+            if not p then
+                p = blizz("Frame", m)
+                p.Bar = blizz("StatusBar", p)
+                p.Bar.BorderLeft = blizz("Texture", p.Bar)
+                p.Bar.BorderRight = blizz("Texture", p.Bar)
+                p.Bar.BorderMid = blizz("Texture", p.Bar)
+            end
+            bars[key] = p
+        end
+        WoW.bset(m, "usedProgressBars", bars)
+        local shown = spec.shown
+        if shown == nil then shown = (spec.blocks or 0) > 0 or (spec.items or 0) > 0 or (spec.bars or 0) > 0 end
+        m._shown = shown and not t.isCollapsed
+        if m._shown then
+            t.NineSlice:ClearAllPoints()
+            t.NineSlice:SetPoint("TOPLEFT", t, "TOPLEFT", -30, 0)
+            t.NineSlice:SetPoint("TOPRIGHT", t, "TOPRIGHT", 5, 0)
+            t.NineSlice:SetPoint("BOTTOM", m, "BOTTOM", 0, -10)
+        end
+        WoW.snapshot()
+        m:EndLayout()
+    end)
+end
+
+-- The player clicks the container's collapse button: ContainerMixin:SetCollapsed
+-- sets isCollapsed and the Header's button, with the modules still shown.
+-- Its Update follows, where each module's EndLayout hides it
+-- (ModuleMixin:EndLayout checks the container): drive that with WoW.layout.
+function WoW.collapse(collapsed)
+    local t = ObjectiveTrackerFrame
+    WoW.asBlizzard(function()
+        WoW.bset(t, "isCollapsed", collapsed)
+        t.Header:SetCollapsed(collapsed)
+    end)
+end
+
+-- The player collapses one module's section: ModuleHeaderMixin:SetCollapsed.
+-- As ObjectiveTrackerModuleMixin:SetCollapsed: the module's field, then its
+-- header (Blizzard_ObjectiveTrackerModule.lua:479).
+function WoW.collapseModule(name, collapsed)
+    WoW.asBlizzard(function()
+        local m = rawget(_G, name)
+        WoW.bset(m, "isCollapsed", collapsed)
+        m.Header:SetCollapsed(collapsed)
+    end)
+end
+
+-- Edit Mode opens or closes (EditModeManagerFrame's OnShow / OnHide).
+function WoW.editMode(on)
+    WoW.asBlizzard(function() EditModeManagerFrame:SetShown(on) end)
+end
+
+--------------------------------------------------------------------------------
 -- Globals
 --------------------------------------------------------------------------------
 
@@ -286,6 +543,10 @@ function WoW.reset()
     WoW.settingsOpened = nil
     WoW.cvars = { autoQuestWatch = false }
     WoW.class = "MAGE"
+    WoW.blizz, WoW.blizzCalls, WoW.luaCalls, WoW.fieldWrites = {}, {}, {}, {}
+    WoW.hookedKeys = setmetatable({}, { __mode = "k" })
+    WoW.snap = setmetatable({}, { __mode = "k" })
+    WoW.inBlizzard = false
     WoW.combat = false
     WoW.loaded = {}
     UIParent = newWidget("Frame", nil, "UIParent")
@@ -293,6 +554,7 @@ function WoW.reset()
     UIParent._width, UIParent._height = 1024, 768
     GameTooltip = newWidget("GameTooltip", UIParent, "GameTooltip")
     UISpecialFrames = {}
+    WoW.makeTracker()
 end
 
 function print(...)
@@ -326,7 +588,17 @@ function hooksecurefunc(t, name, fn)
         return
     end
     local orig = t[name]
-    rawset(t, name, function(self, ...) local r = orig(self, ...); fn(self, ...); return r end)
+    -- The client's own field: not an addon write (test_contract skips it).
+    if rawget(t, "_blizz") then WoW.hookedKeys[t] = WoW.hookedKeys[t] or {}; WoW.hookedKeys[t][name] = true end
+    rawset(t, name, function(self, ...)
+        local r = orig(self, ...)
+        -- The hook is addon code, even when Blizzard's side made the call.
+        local was = WoW.inBlizzard
+        WoW.inBlizzard = false
+        fn(self, ...)
+        WoW.inBlizzard = was
+        return r
+    end)
 end
 
 -- Timers keep their delay: WoW.flushTimers(upTo) runs those due within upTo.
@@ -392,7 +664,9 @@ WoW.reset()
 -- Strict globals.
 -- LibStub: the embedded library's own loader reads _G.LibStub before creating it.
 local allowNil = { GlassQuestTracker = true, GlassQuestTrackerDB = true,
-                   SLASH_GLASSQUESTTRACKER1 = true, SLASH_GLASSQUESTTRACKER2 = true, LibStub = true }
+                   SLASH_GLASSQUESTTRACKER1 = true, SLASH_GLASSQUESTTRACKER2 = true, LibStub = true,
+                   -- TrackerProbe (tests/test_probe.lua): its saved table, read at its ADDON_LOADED.
+                   TrackerProbeDB = true }
 setmetatable(_G, { __index = function(_, k)
     if allowNil[k] then return nil end
     error("read of undefined global '" .. tostring(k) .. "' (not stubbed: is it in the API dump?)", 2)

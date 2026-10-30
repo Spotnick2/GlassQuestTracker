@@ -12,8 +12,12 @@
 
     Usage:
         pwsh Tools/deploy.ps1               # GlassQuestTracker
-        pwsh Tools/deploy.ps1 -Probe        # ...and TrackerProbe
-        pwsh Tools/deploy.ps1 -ProbeOnly    # just TrackerProbe
+        pwsh Tools/deploy.ps1 -Probe        # ...and TrackerProbe, with its host ForeverProbe
+        pwsh Tools/deploy.ps1 -ProbeOnly    # just TrackerProbe and ForeverProbe
+
+    TrackerProbe is a ForeverProbe module (References\Docs\PROBES.md). Its host is
+    deployed first from $env:FOREVERPROBE, else ..\ForeverProbe, with the host's
+    own deploy; a refusal there leaves TrackerProbe untouched.
         pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_forever_\Interface\AddOns"
 #>
 
@@ -33,6 +37,7 @@ $AddOnsPath = (Resolve-Path -LiteralPath $AddOnsPath).ProviderPath
 
 . (Join-Path $PSScriptRoot "LibGlassPin.ps1")
 $LibGlass = if ($env:LIBGLASS) { $env:LIBGLASS } else { Join-Path (Split-Path -Parent $RepoRoot) "LibGlass" }
+$ForeverProbe = if ($env:FOREVERPROBE) { $env:FOREVERPROBE } else { Join-Path (Split-Path -Parent $RepoRoot) "ForeverProbe" }
 
 function Deploy-Addon {
     $dest = Join-Path $AddOnsPath "GlassQuestTracker"
@@ -77,18 +82,27 @@ function Deploy-Addon {
 }
 
 function Deploy-Probe {
+    # The host first (ForeverProbe guide, section 6).
+    $hostDeploy = Join-Path $ForeverProbe "Tools\deploy.ps1"
+    if (-not (Test-Path -LiteralPath $hostDeploy)) {
+        Write-Error "ForeverProbe checkout not found at $ForeverProbe (or set `$env:FOREVERPROBE)"; exit 1
+    }
+    & pwsh -NoProfile -File $hostDeploy -AddOnsPath $AddOnsPath
+    if ($LASTEXITCODE -ne 0) { Write-Error "ForeverProbe deploy refused; TrackerProbe was not touched"; exit 1 }
     $dest = Join-Path $AddOnsPath "TrackerProbe"
     Write-Host "Deploying TrackerProbe -> $dest" -ForegroundColor Cyan
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Tools\TrackerProbe") -File | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dest $_.Name) -Force
-        Write-Host "  $($_.Name)"
-    }
+    # The TOC and Lua only: not forever-probe.pin (CI's).
+    Get-ChildItem -LiteralPath (Join-Path $RepoRoot "Tools\TrackerProbe") -File |
+        Where-Object { $_.Extension -in ".toc", ".lua" } | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dest $_.Name) -Force
+            Write-Host "  $($_.Name)"
+        }
 }
 
 if (-not $ProbeOnly) { Deploy-Addon }
 if ($Probe -or $ProbeOnly) { Deploy-Probe }
 
 Write-Host ""
-Write-Host "First deploy (a brand-new addon folder with new textures): restart the client. Afterwards /reload is enough unless a texture changed." -ForegroundColor Yellow
-Write-Host "In game:  /console scriptErrors 1   then   /gqt help   (probe: /gqtprobe)" -ForegroundColor Green
+Write-Host "/reload in game loads it, a brand-new addon folder included (ForeverProbe guide, section 7)." -ForegroundColor Yellow
+Write-Host "In game:  /console scriptErrors 1   then   /gqt help   (probe: /fp gqt, /fp steps gqt look)" -ForegroundColor Green

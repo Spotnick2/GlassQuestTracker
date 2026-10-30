@@ -221,7 +221,7 @@ pre-built fallback: an event-driven restyle wouldn't cover every module's dirty 
 3. The glass look: Glass, Theme, Tracker, Blizzard, Panel, Skin, the "stock" restore, `test_contract`.
 4. Auto-track + Track all.
 5. Mouse-out fade, options page, `/gqt`.
-6. In-game checklist + full-addon taint pass → v0.1.0 (CurseForge per `..\References\RELEASING.md`).
+6. In-game checklist + full-addon taint pass → v0.1.0 (CurseForge per `..\References\Docs\RELEASING.md`).
 7. Phase-2 design epic: a probe of Blizzard POIs, QuestieDB and player-position secrecy, then
    `docs/PLAN-markers.md` with its own review. No code yet.
 

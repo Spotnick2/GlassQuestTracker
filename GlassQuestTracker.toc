@@ -10,4 +10,9 @@
 Libs\LibGlass-1.0\LibGlass-1.0.xml
 Compat.lua
 Glass.lua
+Theme.lua
+Tracker.lua
+Blizzard.lua
+Panel.lua
+Skin.lua
 GlassQuestTracker.lua

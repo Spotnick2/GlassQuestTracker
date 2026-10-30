@@ -1,8 +1,10 @@
 ## Interface: 16001
-## Title: TrackerProbe (Glass Quest Tracker measuring)
-## Notes: Throwaway: measures Blizzard's quest tracker for Glass Quest Tracker. /gqtprobe
+## Title: TrackerProbe
+## Notes: Throwaway probe for Glass Quest Tracker: measures Blizzard's quest tracker and walks the glass look's in-game checks. A ForeverProbe module: /fp gqt
 ## Author: Spotnick
 ## Version: dev
+## Dependencies: ForeverProbe
+## OptionalDeps: GlassQuestTracker
 ## SavedVariables: TrackerProbeDB
 
 TrackerProbe.lua
