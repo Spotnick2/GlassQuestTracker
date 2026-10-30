@@ -1,22 +1,20 @@
 -- Theme.lua: the looks of the glass, repainted live (Glass MiniMap's Theme.lua).
 --
--- clear   the material's light body, in charcoal
--- smoked  AltStable's darker body (its numbers, as GlassPanel and GlassMail use them)
--- class   the clear body tinted by the player's class colour, shaded by
---         classShade. The class colour may be unreadable early in a login; the
---         surface then stays clear and PLAYER_ENTERING_WORLD paints it again.
+-- clear   the reflective shell's body (References\Docs\LIBGLASS-WINDOW-STYLING.md)
+-- smoked  darker: the recipe's internal-panel body
+-- class   the shell's body in the player's class colour, shaded by classShade.
+--         The class colour may be unreadable early in a login; the surface
+--         then stays clear and PLAYER_ENTERING_WORLD paints it again.
 -- stock   no glass: Blizzard's tracker exactly as it ships (Skin.lua restores it)
 --
--- Only body regions are touched (tint colour, grain and wash alpha): the rims
--- and edge are Panel's. The opaque backing under the glass has its own alpha,
--- the opacity setting (Theme.BackingAlpha).
+-- Only the body is touched (its tint, colour and alpha, and the wash): the
+-- rims and the reflection are Panel's. The opaque backing under the glass
+-- has its own alpha, the opacity setting (Theme.BackingAlpha); medium is the
+-- recipe's.
 --
--- Charcoal, not milky (two rounds of outside critique, 2026-10-15, as
--- GlassChat's second pass): no white wash (over a panel as tall as the
--- tracker its gradient greyed the whole body), a near-black neutral backing,
--- and clear's tint charcoal instead of the material's cool grey-blue, which
--- lifted the backing towards "grey acrylic". The backing is more opaque than
--- first shipped: NPC names showed through the first quest.
+-- No wash (outside critique, 2026-10-15): over a panel as tall as the
+-- tracker its gradient greyed the whole body. It is a gradient, which
+-- ignores SetAlpha on Forever (LibGlass #47), so it goes through SetWash.
 
 GlassQuestTracker = GlassQuestTracker or {}
 local GQT = GlassQuestTracker
@@ -29,18 +27,17 @@ Theme.NAMES = { "clear", "smoked", "class", "stock" }
 Theme.LABELS = { clear = "Clear glass", smoked = "Smoked glass", class = "Class colour glass",
                  stock = "Blizzard's own" }
 Theme.PRESETS = {
-    clear  = { tint = { 0.06, 0.06, 0.07 } },   -- alpha: the material's own
-    smoked = { tint = { 0.05, 0.06, 0.08, 0.62 } },
-    class  = { classShade = 0.6 },
+    clear  = { tint = { 0.085, 0.095, 0.115, 0.78 } },
+    smoked = { tint = { 0.055, 0.07, 0.09, 0.86 } },
+    class  = { classShade = 0.6, alpha = 0.78 },
     stock  = {},
 }
 
 -- The backing under the glass: the tracker sits over the world, and its text
 -- has to read over bright terrain (plan risk 4).
 Theme.OPACITY_NAMES = { "light", "medium", "solid" }
-Theme.OPACITY = { light = 0.65, medium = 0.82, solid = 0.92 }
+Theme.OPACITY = { light = 0.35, medium = 0.55, solid = 0.82 }
 Theme.BACKING = { 0.03, 0.03, 0.035 }
-Theme.WASH = 0   -- a fraction of the material's wash
 
 local surfaces = {}   -- LibGlass g tables
 Theme.pending = false
@@ -68,7 +65,7 @@ local function tintFor(name)
     if name == "class" then
         local r, g, b = API.ClassColor()
         if not r then return nil, false end
-        return { r * p.classShade, g * p.classShade, b * p.classShade }, true
+        return { r * p.classShade, g * p.classShade, b * p.classShade, p.alpha }, true
     end
     return p.tint, true
 end
@@ -79,17 +76,7 @@ local function paint(g, name, tint)
     else
         Glass.SetSurfaceTint(g)
     end
-    if g.grain then g.grain:SetAlpha(Glass.STYLE.grain or 0) end
-    -- The wash is a gradient (LibGlass: clear at the bottom to STYLE.wash
-    -- white at the top), and a gradient texture ignores SetAlpha on this
-    -- client: /run read it at 1 right after SetAlpha(0) (70374, 2026-10-15;
-    -- GlassActionBars measured the same on 2026-10-13). So it is painted
-    -- through its gradient's colours, and hidden outright at zero.
-    if g.wash then
-        local top = (Glass.STYLE.wash or 0) * Theme.WASH
-        g.wash:SetGradient("VERTICAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, top))
-        g.wash:SetShown(top > 0)
-    end
+    Glass.SetWash(g, 0)
 end
 
 -- Add a surface and paint it with the current theme.

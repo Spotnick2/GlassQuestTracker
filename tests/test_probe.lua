@@ -65,7 +65,7 @@ for _, cmd in ipairs({ "frames", "nine", "cvars", "counts", "routine", "accept o
 end
 fp("gqt nine")   -- the overlay off again
 fp("gqt state")
-check(logHas("theme=smoked backing=0.65 glass=true panel=populated wash=false nineslice=0 headerbar=0"),
+check(logHas("theme=smoked backing=0.35 glass=true panel=populated wash=false nineslice=0 headerbar=0"),
       "state: the addon's look as it holds it")
 check(not chatHas("theme=smoked"), "  in the log, not in chat")
 
@@ -271,6 +271,33 @@ WoW.asBlizzard(function() ObjectiveTrackerFrame.Header.Background:SetAlpha(1) en
 check(not (steps[7].check()), "the gold header bar back fails it")
 GQT.Skin.Apply()
 check((steps[7].check()), "(and passes again once the skin is reapplied)")
+
+------------------------------------------------------------------------------
+-- /fp steps gqt collapse: the hand steps alone, to redo them without the themes
+------------------------------------------------------------------------------
+fp("steps gqt collapse")
+rec = ForeverProbeDB.steps.records["TrackerProbe/collapse"]
+check(rec and rec.status == "active", "/fp steps gqt collapse starts")
+eq(#FP.procedures["TrackerProbe/collapse"].steps, 9, "the state, the seven hand steps, the reload")
+eq(rec.results[1].check, "PASS", "1: the glass is on, on arrival")
+eq(rec.at, 2, "at 2")
+S.Next(); settle()
+eq(rec.results[2].check, "FAIL", "2: Next without collapsing still fails")
+S.Back(); settle()
+WoW.collapse(true)
+nextStep(2, "2: collapsed")
+WoW.collapse(false); WoW.layout("QuestObjectiveTracker", { blocks = 2 })
+nextStep(3, "3: expanded")
+eq(rec.results[4].status, "done", "4: the snapshot, on arrival")
+WoW.collapseModule("QuestObjectiveTracker", true); WoW.layout("QuestObjectiveTracker", { shown = true })
+nextStep(5, "5: a section collapsed")
+WoW.collapseModule("QuestObjectiveTracker", false); WoW.layout("QuestObjectiveTracker", { blocks = 2 })
+nextStep(6, "6: and expanded")
+answer(7, false)
+WoW.editMode(true); WoW.editMode(false)
+nextStep(8, "8: Edit Mode opened and closed")
+eq(rec.at, 9, "9: the reload step")
+eq(Theme.Name(), "clear", "it changes no theme")
 
 ------------------------------------------------------------------------------
 -- The routine counts only within an installed pass (#10's review)

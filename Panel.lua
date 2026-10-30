@@ -32,17 +32,20 @@ GQT.Panel = Panel
 Panel.LEFT, Panel.RIGHT, Panel.BOTTOM = 16, -7, 0
 Panel.HEADER_RIGHT, Panel.HEADER_BOTTOM = -2, -4
 
--- The surface, from two rounds of outside critique (2026-10-15). First, as
--- GlassChat's ("a translucent grey panel", "a raised plastic frame" of a
--- rim): the material's rims nearly off, no drop shadow, a darker line along
--- the bottom (GlassChat's in-game pick, 2026-10-03). Second: the library's
--- straight top line and its glow read as "a straight white strip detached
--- from the rounded corners", so the top is our own hairline instead,
--- brightest at the middle and fading to nothing toward both corners. The
--- milky wash is Theme's (off).
-Panel.LOOK = { shadow = 0, rim = 0.1, dark = 0.1, top = 0.3, bottom = 0.35 }
+-- The surface: the suite's reflective shell (References\Docs\LIBGLASS-
+-- WINDOW-STYLING.md, LibGlass r9's Glass.Reflect; the owner's choice, 2026-10-18),
+-- the window look GlassRaidFrames and PetStable share. The library's rims
+-- low, with Reflect's lit rim, a top hairline brightest at the left and a
+-- short reflection over the header in their place; the edge off; the bottom
+-- quiet. The body's tint and wash are Theme's, the backing's opacity the
+-- setting's.
+Panel.SHELL = { rim = 0.12, dark = 0.55, grain = 0, shadow = 0.18 }
+-- The header reflection's height, fitted to the tracker's "All Objectives"
+-- band (32 px on 70374: the tracker's top 884.5, the Header's bottom 852.5):
+-- it fades out over the section title, before the first quest line.
+Panel.HEADER = 36
 
-local panel, g, backing, taper
+local panel, g, backing, reflect
 Panel.state = nil   -- "populated" | "header", after the last Place
 
 function Panel.Build()
@@ -53,12 +56,9 @@ function Panel.Build()
     panel:SetFrameLevel(math.max(0, level - 1))
     g = Glass.Apply(panel, "large")
     g.top:SetFrameLevel(level)
-    local L = Panel.LOOK
-    g.shadow:SetAlpha(L.shadow)
-    g.rim:SetAlpha(L.rim)
-    g.dark:SetAlpha(L.dark)
-    Glass.SetEdge(g, 0, 0, L.bottom)
-    taper = Panel.Taper(g, L.top)
+    for part, a in pairs(Panel.SHELL) do Glass.SetSurfaceAlpha(g, part, a) end
+    Glass.SetEdge(g, 0, 0, 0)   -- Reflect's top hairline takes its place
+    reflect = Glass.Reflect(g, panel, { header = Panel.HEADER })
     Theme.Register(g)
     -- The opaque backing (GlassMiniMap's tracking menu): above the shadow
     -- (-8), under the tint (-6), clipped by the glass's own mask.
@@ -67,23 +67,6 @@ function Panel.Build()
     backing:AddMaskTexture(g.mask)
     Panel.Repaint()
     return panel
-end
-
--- The top hairline in two halves on the place of the library's (hidden) top
--- line: each fades from nothing at its corner to `a` at the middle.
-function Panel.Taper(g, a)
-    local line = g.edge and g.edge.top
-    if not line then return nil end
-    local function half(from, to, c1, c2)
-        local tex = g.top:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetPoint("TOPLEFT", line, from)
-        tex:SetPoint("BOTTOMRIGHT", line, to)
-        tex:SetColorTexture(1, 1, 1, 1)
-        tex:SetGradient("HORIZONTAL", c1, c2)
-        return tex
-    end
-    local clear, lit = CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, a)
-    return { left = half("TOPLEFT", "BOTTOM", clear, lit), right = half("TOP", "BOTTOMRIGHT", lit, clear) }
 end
 
 function Panel.Repaint()
@@ -112,4 +95,4 @@ function Panel.SetShown(on)
 end
 
 Panel._test = { frame = function() return panel end, g = function() return g end,
-                backing = function() return backing end, taper = function() return taper end }
+                backing = function() return backing end, reflect = function() return reflect end }

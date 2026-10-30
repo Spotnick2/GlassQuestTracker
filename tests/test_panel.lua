@@ -16,37 +16,31 @@ eq(p:GetFrameLevel(), t:GetFrameLevel() - 1, "one level under the tracker")
 eq(g.top:GetFrameLevel(), t:GetFrameLevel(), "the rim at the tracker's level, under its modules")
 check(g.top:GetFrameLevel() < QuestObjectiveTracker:GetFrameLevel(), "modules draw above the glass")
 
--- The surface: rims nearly off, no shadow, a dark bottom line, our tapered
--- top hairline in place of the library's straight one, no wash.
-local L = Panel.LOOK
-eq(g.shadow:GetAlpha(), L.shadow, "no drop shadow")
-near(g.rim:GetAlpha(), L.rim, "the rim nearly off")
-near(g.dark:GetAlpha(), L.dark, "the dark rim nearly off")
-check(g.edge and g.edge.custom, "the panel's own edge")
-check(not g.edge.top:IsShown() and not g.edge.glow:IsShown(), "the library's straight top line and glow off")
-near(g.edge.bottom._color[4], L.bottom, "a darker bottom line")
-check(g.edge.bottom:IsShown(), "the bottom line shows")
--- (The wash is a gradient, which ignores SetAlpha on this client: hidden,
--- and clear at its top.)
-check(not g.wash:IsShown(), "no milky wash: hidden")
-near(g.wash._gradient[3].a, 0, "no milky wash: its gradient clear at the top too")
+-- The surface: the suite's reflective shell (LIBGLASS-WINDOW-STYLING.md).
+-- The library's rims low, its edge off, no wash; Reflect's three layers.
+local S = Panel.SHELL
+near(g.rim:GetAlpha(), S.rim, "the library's rim low")
+near(g.dark:GetAlpha(), S.dark, "its dark rim at the recipe's")
+near(g.shadow:GetAlpha(), S.shadow, "a faint shadow")
+eq(g.grain:GetAlpha(), 0, "no grain")
+check(not g.edge.top:IsShown() and not g.edge.glow:IsShown() and not g.edge.bottom:IsShown(),
+      "the library's edge off: the reflection's hairline takes its place, the bottom stays quiet")
+-- (The wash is a gradient, which ignores SetAlpha on Forever: SetWash hides it.)
+check(not g.wash:IsShown(), "no milky wash")
 
-local taper = Panel._test.taper()
-check(taper ~= nil, "the tapered top line is built")
--- A half: on g.top, over the library's line from `from` to `to`, fading
--- horizontally from alpha a1 to a2.
-local function half(tex, from, to, a1, a2, msg)
-    check(tex:GetParent() == g.top, msg .. ": above the body, on g.top")
-    local p1, p2 = tex._points[1], tex._points[2]
-    check(p1 and p1[1] == "TOPLEFT" and p1[2] == g.edge.top and p1[3] == from, msg .. ": starts at the line's " .. from)
-    check(p2 and p2[1] == "BOTTOMRIGHT" and p2[2] == g.edge.top and p2[3] == to, msg .. ": ends at the line's " .. to)
-    local gr = tex._gradient or {}
-    check(gr[1] == "HORIZONTAL", msg .. ": a horizontal fade")
-    near(gr[2] and gr[2].a or -1, a1, msg .. ": alpha at its left")
-    near(gr[3] and gr[3].a or -1, a2, msg .. ": alpha at its right")
-end
-half(taper.left, "TOPLEFT", "BOTTOM", 0, L.top, "left half: nothing at the corner, brightest at the middle")
-half(taper.right, "TOP", "BOTTOMRIGHT", L.top, 0, "right half: brightest at the middle, nothing at the corner")
+local rf = Panel._test.reflect()
+check(rf ~= nil and g.reflect == rf, "the reflection is built, once")
+local function grad(tex) local gr = tex and tex._gradient or {}; return gr[1], gr[2] and gr[2].a, gr[3] and gr[3].a end
+local o, a1, a2 = grad(rf.rim)
+check(rf.rim:GetParent() == g.top and o == "VERTICAL" and a2 > a1, "a lit rim on g.top, brighter at the top")
+o, a1, a2 = grad(rf.top)
+check(rf.top:GetParent() == g.top and o == "HORIZONTAL" and a1 > a2, "a top hairline, brightest at the left")
+o, a1, a2 = grad(rf.header)
+check(o == "VERTICAL" and a1 == 0 and a2 > 0, "a header reflection, gone at its bottom")
+eq(rf.header._height, Panel.HEADER, "fitted to the tracker's header band")
+check(rf.header._masks and rf.header._masks[1] == g.mask, "inside the glass's rounded mask")
+check(Panel.HEADER > 32 and Panel.HEADER < 32 + 25,
+      "past the 'All Objectives' band (32 px), gone before the section title ends (25 px more)")
 
 -- The point a panel corner is anchored to, as { relativeTo, relativePoint, x, y }.
 local function anchor(point)
@@ -113,6 +107,7 @@ near(g.tint._color[4], Theme.PRESETS.smoked.tint[4], "smoked tint")
 check(not g.wash:IsShown(), "smoked: no wash either")
 GQT._test.slash("theme class")
 near(g.tint._color[1], 0.25 * Theme.PRESETS.class.classShade, "class tint (mage)")
+near(g.tint._color[4], Theme.PRESETS.class.alpha, "class: at the shell's alpha too")
 GQT._test.slash("theme stock")
 check(not p:IsShown(), "stock: no glass")
 WoW.layout("QuestObjectiveTracker", { blocks = 1 })
@@ -120,7 +115,7 @@ check(not p:IsShown(), "stock: a layout doesn't bring it back")
 GQT._test.slash("theme clear")
 check(p:IsShown(), "glass again")
 near(g.tint._color[1], Theme.PRESETS.clear.tint[1], "clear: charcoal")
-near(g.tint._color[4], g.tint.glassColor[4], "clear: at the material's own alpha")
+near(g.tint._color[4], Theme.PRESETS.clear.tint[4], "clear: at the shell's alpha, not the material's 0.24")
 
 -- A saved stock theme starts without glass.
 GQT = loadAddon({ db = { theme = "stock" } })

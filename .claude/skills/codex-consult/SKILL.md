@@ -89,14 +89,14 @@ For Glass Quest Tracker, good things to hand Codex:
 - the phase-2 marker library (`LibQuestMarkers-1.0`): its upgrade rules are LibGlass's.
 
 **Always hand it `CLAUDE.md` and `docs/PLAN.md` alongside the diff or plan**, plus
-`C:/Projects/WoW/References/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
+`C:/Projects/WoW/References/Docs/PORTING-TBC-TO-FOREVER.md` and `docs/FOREVER-PROBE.md`. Those findings
 were measured on the live client. Without them, a cold reviewer argues from Classic-era or Retail
 behaviour that doesn't hold here (that the Classic `QuestWatchFrame` exists, that calling the
 tracker's own methods is harmless).
-`C:/Projects/WoW/References/forever-api-1.60.1.70374.md` is the full API surface when a question
+`C:/Projects/WoW/References/Forever/api/` (its newest `forever-api-*.md`) is the full API surface when a question
 turns on whether something exists, and `C:/Projects/WoW/wow-ui-source` (branch `forever`) is the
 client's own FrameXML (`Blizzard_ObjectiveTracker`). The design references are
-`C:/Projects/WoW/References/Questie-v12.1.0+v1.0.6` (GPL) and `ForeverUI-0.4.42` (its
+`C:/Projects/WoW/References/Addons/QuestsLeveling/Questie` (GPL) and `C:/Projects/WoW/References/Addons/UISuites/ForeverUI` (its
 `Modules/Quests` measured the tracker's taint); behaviour references only, their code is never copied.
 
 Say what you have already established and ask it not to repeat that work. A clean "no defect found"

@@ -616,9 +616,65 @@ local function sectionDown()
     end
 end
 
-Probe:Steps("look", {
+-- What only the owner's hands can do: collapse the tracker and a section,
+-- Edit Mode. In the look procedure, and alone as /fp steps gqt collapse, to
+-- redo them without the themes (the first full run, 2026-10-17, 70450, went
+-- past them in a second each).
+local function handSteps()
+    return {
+        { text = "Collapse the whole tracker: click the '-' at the top right, beside 'All Objectives', and wait until it folds to that line. Then press Next.",
+          check = glassOn({ collapsed = true, panel = "header" }), screenshot = "collapsed" },
+        { text = "Expand it again with the same button, then press Next.",
+          check = glassOn({ collapsed = false, panel = "populated" }) },
+        { text = "Noting which sections are collapsed now, and Edit Mode's opens and closes so far.", auto = true,
+          run = function()
+              before = { sections = collapsedSections(), shown = editMode.shown, hidden = editMode.hidden }
+              local n = 0
+              for _ in pairs(before.sections) do n = n + 1 end
+              return n .. " collapsed, Edit Mode " .. editMode.shown .. "/" .. editMode.hidden
+          end },
+        { text = "Collapse the 'Quests' section: click the '-' at the right of its title, so its quests disappear. Then press Next.",
+          check = function()
+              if not before then return false, LOST end
+              local m = sectionDown()
+              local ok, why = glassOn({ panel = "populated" })()
+              if not m then return false, "no section was collapsed since the snapshot: " .. why end
+              before.down = m   -- the one the next step must see expanded
+              return ok, moduleName(m) .. " collapsed; " .. why
+          end, screenshot = "section collapsed" },
+        { text = "Expand the section again, then press Next.",
+          check = function()
+              if not before then return false, LOST end
+              local m = before.down
+              if not m then return false, "no section was collapsed at the step before: go Back and collapse one" end
+              local ok, why = glassOn({ panel = "populated" })()
+              if m.isCollapsed == true then return false, moduleName(m) .. " is still collapsed: " .. why end
+              return ok, moduleName(m) .. " expanded; " .. why
+          end },
+        { text = "While you did that (or when a section first appeared), did you see any gold bar or shine flash behind a section title? Note when.",
+          ask = true },
+        { text = "Open Edit Mode, click the tracker, drag it a little and change its Height. Then close Edit Mode (Save or Revert) and press Next.",
+          check = function()
+              if not before then return false, LOST end
+              local ok, why = glassOn({ panel = "populated" })()
+              local opened = editMode.shown > before.shown
+              local closed = editMode.hidden > before.hidden
+              if not (opened and closed) then
+                  return false, "Edit Mode wasn't " .. (opened and "closed" or "opened") .. " since the snapshot: " .. why
+              end
+              return ok, why
+          end, screenshot = "after Edit Mode" },
+    }
+end
+
+local function append(list, more)
+    for _, step in ipairs(more) do list[#list + 1] = step end
+    return list
+end
+
+local look = {
     title = "Glass Quest Tracker: the glass look (#3)",
-    rev = 3,
+    rev = 4,
     { text = "Reading Glass Quest Tracker's state, and your theme and opacity, to put back at the end.",
       auto = true, run = function()
           keepLook()
@@ -659,48 +715,9 @@ Probe:Steps("look", {
       end },
     { text = "Look at the '-' button right of the 'Quests' section title. Is it fully on the glass, with a little glass to its right?",
       ask = true, screenshot = "right edge" },
-    { text = "Collapse the whole tracker: click the button at the top right, beside 'All Objectives'. Then press Next.",
-      check = glassOn({ collapsed = true, panel = "header" }), screenshot = "collapsed" },
-    { text = "Expand it again, then press Next.",
-      check = glassOn({ collapsed = false, panel = "populated" }) },
-    { text = "Noting which sections are collapsed now, and Edit Mode's opens and closes so far.", auto = true,
-      run = function()
-          before = { sections = collapsedSections(), shown = editMode.shown, hidden = editMode.hidden }
-          local n = 0
-          for _ in pairs(before.sections) do n = n + 1 end
-          return n .. " collapsed, Edit Mode " .. editMode.shown .. "/" .. editMode.hidden
-      end },
-    { text = "Collapse the 'Quests' section with its '-' button, then press Next.",
-      check = function()
-          if not before then return false, LOST end
-          local m = sectionDown()
-          local ok, why = glassOn({ panel = "populated" })()
-          if not m then return false, "no section was collapsed since the snapshot: " .. why end
-          before.down = m   -- the one the next step must see expanded
-          return ok, moduleName(m) .. " collapsed; " .. why
-      end, screenshot = "section collapsed" },
-    { text = "Expand the section again, then press Next.",
-      check = function()
-          if not before then return false, LOST end
-          local m = before.down
-          if not m then return false, "no section was collapsed at the step before: go Back and collapse one" end
-          local ok, why = glassOn({ panel = "populated" })()
-          if m.isCollapsed == true then return false, moduleName(m) .. " is still collapsed: " .. why end
-          return ok, moduleName(m) .. " expanded; " .. why
-      end },
-    { text = "While you did that (or when a section first appeared), did you see any gold bar or shine flash behind a section title? Note when.",
-      ask = true },
-    { text = "Open Edit Mode, click the tracker, drag it a little and change its Height. Then close Edit Mode (Save or Revert) and press Next.",
-      check = function()
-          if not before then return false, LOST end
-          local ok, why = glassOn({ panel = "populated" })()
-          local opened = editMode.shown > before.shown
-          local closed = editMode.hidden > before.hidden
-          if not (opened and closed) then
-              return false, "Edit Mode wasn't " .. (opened and "closed" or "opened") .. " since the snapshot: " .. why
-          end
-          return ok, why
-      end, screenshot = "after Edit Mode" },
+}
+append(look, handSteps())
+append(look, {
     { text = "Stand or turn so the tracker is over bright ground or sky. Is every line easy to read?",
       ask = true, screenshot = "bright background" },
     { text = "Glass Quest Tracker's failures (/gqt failures).", auto = true,
@@ -728,6 +745,18 @@ Probe:Steps("look", {
     { text = "That's all. Type /reload (or press Reload now) so the results and the screenshot names are saved.",
       reload = true },
 })
+Probe:Steps("look", look)
+
+Probe:Steps("collapse", append({
+    title = "Glass Quest Tracker: collapsing and Edit Mode (#3)",
+    rev = 1,
+    { text = "Reading Glass Quest Tracker's state. Have a few quests tracked and the tracker expanded.",
+      auto = true, run = function() return describe(lookState()) end,
+      check = glassOn({ panel = "populated" }) },
+}, append(handSteps(), {
+    { text = "That's all. Type /reload (or press Reload now) so the results and the screenshot names are saved.",
+      reload = true },
+})))
 
 --------------------------------------------------------------------------------
 -- Commands

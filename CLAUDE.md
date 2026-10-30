@@ -77,12 +77,16 @@ Planned, per docs/PLAN.md: `AutoTrack`, `Options`. `Tools\TrackerProbe\` is the 
 
 ## References
 
-- `..\References\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure buttons, secret values,
+- `..\References\Docs\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure buttons, secret values,
   options-page recipe, packaging.
-- `..\References\forever-api-1.60.1.70374.md`: does an API exist? Presence is not a contract.
-- `..\References\RELEASING.md`, `..\References\LIBGLASS-MIGRATION.md`, `..\References\EMBEDDED-LIBRARIES.md`.
-- `..\References\ForeverUI-0.4.42\ForeverUI\Modules\Quests\`: what another addon measured on the tracker.
-- `..\References\Questie-v12.1.0+v1.0.6`: tracker UX and map markers. GPL: ideas only.
+- `..\References\Forever\api\`, the newest `forever-api-<version>.<build>.md` there: does an API exist?
+  Presence is not a contract. The tests check method and event names against 70450's
+  (`tests/wow_stubs.lua`).
+- `..\References\Docs\LIBGLASS-WINDOW-STYLING.md`: the suite's reflective window look, which the
+  panel follows (LibGlass r9's `Glass.Reflect`).
+- `..\References\Docs\RELEASING.md`, `..\References\Docs\LIBGLASS-MIGRATION.md`, `..\References\Docs\EMBEDDED-LIBRARIES.md`.
+- `..\References\Addons\UISuites\ForeverUI\ForeverUI\Modules\Quests\`: what another addon measured on the tracker.
+- `..\References\Addons\QuestsLeveling\Questie`: tracker UX and map markers. GPL: ideas only.
 - `..\LibGlass\docs\GLASS-MATERIAL.md`: the material and its region fields.
 
 ## Toolchain and commands
@@ -119,7 +123,7 @@ rendering or the live client's data: that's the probe and the in-game checklist.
 - **The owner merges and closes PRs and launches reviews.**
 - **Plans** get an adversarial review before coding: Codex via the `codex-consult` skill,
   `-m gpt-6-astra` at high effort, looping until consensus, without overengineering.
-- Releases: `..\References\RELEASING.md`. The CurseForge project is created by the owner before
+- Releases: `..\References\Docs\RELEASING.md`. The CurseForge project is created by the owner before
   v0.1.0.
 
 ## Conventions

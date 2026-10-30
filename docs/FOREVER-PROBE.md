@@ -3,7 +3,7 @@
 What has to be measured on the live client before the skin is built (#2), and what was found.
 Record the build each result was measured on.
 
-TrackerProbe is a ForeverProbe module (`References\PROBES.md`, #13): `/fp gqt <command>`. Deploy
+TrackerProbe is a ForeverProbe module (`References\Docs\PROBES.md`, #13): `/fp gqt <command>`. Deploy
 with `pwsh Tools\deploy.ps1 -Probe`, which deploys the host (`..\ForeverProbe`) first, then
 `/reload`. Its lines go to the ForeverProbe console (`/fp`), never to chat, and are saved: after a
 `/reload` or logout they're in `WTF\Account\<account>\SavedVariables\TrackerProbe.lua`
@@ -59,7 +59,8 @@ snapshot: those steps then fail and say so; go Back to the "Noting" step, press 
 kept in `TrackerProbeDB.look` until they're put back, so a run stopped or restarted part-way
 doesn't lose them. `/fp gqt restore` puts them back by hand.
 
-`/fp gqt state` prints the same state at any time. After the closing `/reload`, the results are in
+`/fp steps gqt collapse` is the same hand steps alone (collapsing, a section, Edit Mode), to redo
+them without the themes. `/fp gqt state` prints the same state at any time. After the closing `/reload`, the results are in
 `ForeverProbe.lua` (`steps.records["TrackerProbe/look"]`), and the screenshot file names are on
 each step (`..\ForeverProbe\Tools\screenshots.ps1 -Module TrackerProbe` lists them).
 
@@ -107,3 +108,14 @@ Decursive, DBM loaded.
   hiding it at zero fixed it (`false 1`). The same as GlassActionBars measured on 10-13; LibGlass's
   probe then showed that order and texture kind don't matter (porting guide §3, "A gradient texture
   ignores SetAlpha"). `tests/wow_stubs.lua` models it.
+
+**1.60.1.70450, 2026-10-17** (`/fp steps gqt look`, the charcoal look before the reflective shell;
+screenshots `WoWScrnShot_101726_0113*`–`0115*`):
+- **Passed, checks and screenshots agreeing:** clear, smoked, class and stock (stock showed
+  Blizzard's gold bars and red minimize button: "looks like Blizzard's own", yes); opacity light,
+  solid and medium; the section "−" fully on the glass; Edit Mode move and Height, with the glass
+  following; readable over bright ground; `/gqt failures` empty; the owner's look put back.
+- **Not exercised:** collapsing the tracker and a section. Next came 1–2 s after each step
+  appeared, and the screenshots show both still expanded, so the checks failed as designed.
+  `/fp steps gqt collapse` redoes them.
+- **Gold flash on a section title:** "unsure".

@@ -15,14 +15,14 @@
         pwsh Tools/deploy.ps1 -Probe        # ...and TrackerProbe, with its host ForeverProbe
         pwsh Tools/deploy.ps1 -ProbeOnly    # just TrackerProbe and ForeverProbe
 
-    TrackerProbe is a ForeverProbe module (References\PROBES.md). Its host is
+    TrackerProbe is a ForeverProbe module (References\Docs\PROBES.md). Its host is
     deployed first from $env:FOREVERPROBE, else ..\ForeverProbe, with the host's
     own deploy; a refusal there leaves TrackerProbe untouched.
-        pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_classic_beta_\Interface\AddOns"
+        pwsh Tools/deploy.ps1 -AddOnsPath "D:\...\_forever_\Interface\AddOns"
 #>
 
 param(
-    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_classic_beta_\Interface\AddOns",
+    [string]$AddOnsPath = "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns",
     [switch]$Probe,
     [switch]$ProbeOnly
 )

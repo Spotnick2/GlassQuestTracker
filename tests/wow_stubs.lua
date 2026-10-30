@@ -12,7 +12,7 @@
 -- - The widget METATABLE is a real method table, like the client's.
 
 WoW = {}
-WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/forever-api-1.60.1.70374.md"
+WoW.DUMP = os.getenv("GLASSQT_API_DUMP") or "C:/Projects/WoW/References/Forever/api/forever-api-1.60.1.70450.md"
 
 --------------------------------------------------------------------------------
 -- Known events (from the dump when present)
