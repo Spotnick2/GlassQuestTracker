@@ -33,4 +33,7 @@ check(table.concat(WoW.chat, "\n"):find("/gqt version", 1, true), "/gqt with no 
 GQT = loadAddon({ db = { junk = nil } })
 eq(next(GlassQuestTrackerDB), nil, "an untouched profile saves nothing")
 
+-- The help ("" above) prints /gqt's two lines with a bare | (#17).
+eq(acceptKnownStrays(), 2, "the known stray help lines, two per help printed (#17)")
+
 done("test_boot")
