@@ -1,29 +1,17 @@
--- Every widget method the addon calls must exist on this client.
+-- Every widget method the addon calls must exist on this client, for that
+-- widget type (WowTestKit's Kit.checkMethods, against the build tests/kit.pin
+-- names).
 --
--- The stub answers any Capitalised method call (a no-op for ones it does not
--- implement), so a call to a method Forever lacks would otherwise pass
--- silently. This checks each recorded "Type:Method" against the API dump's
--- widget-method walk. Keep it exercising every handler the addon installs.
+-- The stub refuses a method the build lacks on a type only where it's called,
+-- and a method a Methods implementation provides answers on every type, so a
+-- call to a method Forever lacks on that widget would otherwise pass
+-- silently. This checks each recorded "Type:Method" as that exact pair.
+-- Keep it exercising every handler the addon installs.
 -- It does NOT prove argument contracts, event behaviour or protection rules:
 -- that is the in-game pass (docs/FOREVER-PROBE.md).
 dofile("tests/wow_stubs.lua")
 dofile("tests/harness.lua")
 
-local f = io.open(WoW.DUMP, "r")
-if not f then
-    io.write("test_methods: SKIPPED (no API dump at " .. WoW.DUMP .. ")\n")
-    os.exit(0)
-end
-local widget, documented = {}, {}
-for line in f:lines() do
-    local wm = line:match("^(%a+:%a+)%s*$")
-    if wm then widget[wm] = true end
-    local fn = line:match("^([%a_]+)%(")
-    if fn then documented[fn] = true end
-end
-f:close()
-
-WoW.methodsCalled = {}
 local GQT = loadAddon()
 
 -- Every handler the skin installs: layouts with every pooled extra, both
@@ -43,13 +31,14 @@ for _, cmd in ipairs({ "failures", "version", "help", "", "theme smoked", "theme
 end
 WoW.flushTimers()
 
-local n = 0
-for name in pairs(WoW.methodsCalled) do
-    n = n + 1
-    local method = name:match(":(%a+)$")
-    check(widget[name] or documented[method], "method exists on Forever: " .. name)
-end
-check(n > 35, "recorded a realistic number of methods (raise it as features land) (" .. n .. ")")
+-- The help ("help", "") prints /gqt's two lines with a bare | (#17).
+eq(acceptKnownStrays(), 4, "the known stray help lines, two per help printed (#17)")
+
+-- Loading alone records 41 (the first pass styles every module), the session
+-- 43 (a find-group button's disabled art, a collapse's atlas swap): the floor
+-- sits above the load, so the exercise can't quietly shrink back to it.
+local recorded = Kit.checkMethods()
+check(recorded >= 42,"the exercise reached the tracker and every command (" .. recorded .. " recorded)")
 eq(next(GQT.failures), nil, "no failures recorded while exercising everything")
 for k, v in pairs(GQT.failures) do io.write("    " .. k .. ": " .. v .. "\n") end
 done("test_methods")

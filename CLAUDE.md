@@ -82,8 +82,8 @@ Planned, per docs/PLAN.md: `AutoTrack`, `Options`. `Tools\TrackerProbe\` is the 
 - `..\References\Docs\PORTING-TBC-TO-FOREVER.md`: Edit Mode systems, secure buttons, secret values,
   options-page recipe, packaging.
 - `..\References\Forever\api\`, the newest `forever-api-<version>.<build>.md` there: does an API exist?
-  Presence is not a contract. The tests check method and event names against 70450's
-  (`tests/wow_stubs.lua`).
+  Presence is not a contract. The tests check method and event names against the build
+  `tests\kit.pin` names (WowTestKit's data for it).
 - `..\References\Docs\LIBGLASS-WINDOW-STYLING.md`: the suite's reflective window look, which the
   panel follows (LibGlass r9's `Glass.Reflect`).
 - `..\References\Docs\RELEASING.md`, `..\References\Docs\LIBGLASS-MIGRATION.md`, `..\References\Docs\EMBEDDED-LIBRARIES.md`.
@@ -96,8 +96,9 @@ Planned, per docs/PLAN.md: `AutoTrack`, `Options`. `Tools\TrackerProbe\` is the 
 Lua 5.1 at `C:\Program Files (x86)\Lua\5.1\` (`lua.exe`, `luac.exe`). No build step.
 
 ```powershell
-pwsh tests\run.ps1                                                   # luac -p on the TOC files (+ probe), then every tests\test_*.lua (needs ..\LibGlass or $env:LIBGLASS)
-& 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root
+pwsh tests\run.ps1                                                   # through WowTestKit at the pin: luac -p on the TOC files (+ probe), then every tests\test_*.lua (needs ..\LibGlass or $env:LIBGLASS)
+pwsh tests\run.ps1 -KitDev                                           # the same against the ..\WowTestKit working copy instead of the pin
+& 'C:\Program Files (x86)\Lua\5.1\lua.exe' tests\test_boot.lua      # one test, from the repo root (once run.ps1 has fetched the kit)
 pwsh Tools\deploy.ps1 -Probe                                         # copy the addon (+ ForeverProbe and TrackerProbe) into AddOns
 ```
 
@@ -112,10 +113,19 @@ pwsh Tools\deploy.ps1 -Probe                                         # copy the 
 
 ## Testing
 
-Glass MiniMap's harness: `tests\wow_stubs.lua` (strict globals as an allowlist of APIs verified in
-the dump, event names validated against the dump, every widget method recorded),
-`tests\harness.lua` (`check`, `eq`, `near`, `loadAddon`), `test_methods.lua` (every method called
-exists on this client). **Mutation-test every new test.** Offline tests can't cover taint,
+The test scaffolding is WowTestKit (`C:\Projects\WoW\WowTestKit`; its README is the reference)
+at the commit and client build `tests\kit.pin` names. `tests\run.ps1` puts that commit in
+`%LOCALAPPDATA%\WowTestKit\<sha>` and hands off to the kit's runner; CI fetches it with
+`tests\fetch_kit.sh`. `tests\kit.lua`, `kit.ps1` and `fetch_kit.sh` are the kit's bootstrap
+copies: never edit them here. A kit need is an issue on the kit, worked around in
+`tests\wow_stubs.lua` with a `-- WowTestKit #N:` comment meanwhile. `tests\run.ps1 -KitDev`
+runs against the `..\WowTestKit` working copy instead of the pin.
+
+`tests\wow_stubs.lua` (on the kit: Blizzard's objective tracker with the UI contract's record of
+addon calls, Lua-method calls and field writes on it, the widget methods the core lacks, and the
+client APIs the addon reads), `tests\harness.lua` (`near`, `loadAddon`, the probe loaders;
+`check`, `eq`, `done` are the kit's), `test_methods.lua` (every `Type:Method` called exists on
+that type in the pinned build, `Kit.checkMethods`). **Mutation-test every new test.** Offline tests can't cover taint,
 rendering or the live client's data: that's the probe and the in-game checklist.
 
 ## Workflow and releasing
