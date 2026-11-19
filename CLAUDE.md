@@ -134,7 +134,7 @@ rendering or the live client's data: that's the probe and the in-game checklist.
   when asked. `luac -p` clean and tests green before committing.
 - **The owner merges and closes PRs and launches reviews.**
 - **Plans** get an adversarial review before coding: Codex via the `codex-consult` skill,
-  `-m gpt-6-astra` at high effort, looping until consensus, without overengineering.
+  `-m gpt-6.2-astra` at high effort, looping until consensus, without overengineering.
 - Releases: `..\References\Docs\RELEASING.md`. The CurseForge project is created by the owner before
   v0.1.0.
 
